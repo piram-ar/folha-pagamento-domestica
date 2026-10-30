@@ -19,7 +19,9 @@ from ..models import (
 )
 from . import tabelas
 from .calendario import dias_uteis as calcular_dias_uteis
+from .esocial import rubrica_beneficio
 from .inss import faixas_do_mes, inss_progressivo
+from .salario import salario_do_mes
 
 CENTAVO = Decimal("0.01")
 ZERO = Decimal("0")
@@ -71,7 +73,7 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
     """Calcula todos os valores da folha do mês sem gravar nada."""
     if dias_uteis is None:
         dias_uteis = calcular_dias_uteis(mes_ano, trabalhador.dias_semana_trabalho)
-    salario_base = Decimal(trabalhador.salario_base)
+    salario_base = salario_do_mes(trabalhador, mes_ano)  # considera reajustes vigentes no mês
     dias = min(Decimal(dias_trabalhados), tabelas.DIAS_MES_COMERCIAL)
     salario_proporcional = q(salario_base / tabelas.DIAS_MES_COMERCIAL * dias)
 
@@ -83,20 +85,21 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
 
     itens: list[dict] = []
 
-    def item(codigo, descricao, referencia, tipo, valor):
+    def item(codigo, descricao, referencia, tipo, valor, esocial=None):
         if valor:
             itens.append({
                 "codigo": codigo, "descricao": descricao, "referencia": referencia,
-                "tipo": tipo, "valor": str(q(valor)),
+                "tipo": tipo, "valor": str(q(valor)), "esocial": esocial,
             })
 
     clt = trabalhador.tipo_contrato == TipoContrato.com_registro
-    item("001", "Salário" if clt else "Serviços prestados", f"{dias_trabalhados} dias", "provento", salario_proporcional)
+    item("001", "Salário" if clt else "Serviços prestados", f"{dias_trabalhados} dias", "provento", salario_proporcional,
+         "1000")
 
     # Horas extras agrupadas por percentual
     he_por_pct: dict[Decimal, list[Decimal]] = defaultdict(lambda: [ZERO, ZERO])
-    total_bonus = total_faltas = total_vales = ZERO
-    horas_falta = ZERO
+    total_bonus = total_faltas = total_vales = total_atrasos = ZERO
+    horas_atraso = ZERO
     qtd_vales = 0
     for ev in eventos:
         if ev.tipo == TipoEvento.hora_extra:
@@ -105,9 +108,11 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
             he_por_pct[pct][1] += Decimal(ev.valor)
         elif ev.tipo == TipoEvento.bonus:
             total_bonus += Decimal(ev.valor)
+        elif ev.tipo == TipoEvento.falta and ev.quantidade_horas:  # lançada em horas: atraso
+            total_atrasos += Decimal(ev.valor)
+            horas_atraso += Decimal(ev.quantidade_horas)
         elif ev.tipo == TipoEvento.falta:
             total_faltas += Decimal(ev.valor)
-            horas_falta += Decimal(ev.quantidade_horas or 0)
         elif ev.tipo == TipoEvento.vale_antecipacao:
             total_vales += Decimal(ev.valor)
             qtd_vales += 1
@@ -116,8 +121,8 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
     for pct in sorted(he_por_pct):
         horas, valor = he_por_pct[pct]
         total_he += valor
-        item("002", f"Horas extras {_fmt(pct)}%", f"{_fmt(horas)} h" if horas else "", "provento", valor)
-    item("003", "Bônus / gratificação", "", "provento", total_bonus)
+        item("002", f"Horas extras {_fmt(pct)}%", f"{_fmt(horas)} h" if horas else "", "provento", valor, "1100")
+    item("003", "Bônus / gratificação", "", "provento", total_bonus, "1410")
 
     total_benef_prov = total_benef_desc = ZERO
     informativos = []
@@ -129,16 +134,19 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
             referencia = f"{dias_uteis} d × {q(b.valor)}".replace(".", ",")
         if b.natureza == NaturezaBeneficio.provento:
             total_benef_prov += valor
-            item("004", rotulo, referencia, "provento", valor)
+            item("004", rotulo, referencia, "provento", valor, rubrica_beneficio(b.tipo.value, False))
         elif b.natureza == NaturezaBeneficio.desconto:
             total_benef_desc += valor
-            item("104", b.descricao or f"Desconto {rotulo.lower()}", "", "desconto", valor)
+            item("104", b.descricao or f"Desconto {rotulo.lower()}", "", "desconto", valor,
+                 rubrica_beneficio(b.tipo.value, True))
         elif valor:
             descricao = f"{rotulo} ({dias_uteis} dias úteis)" if vt_por_dia(b) else rotulo
             informativos.append({"descricao": descricao, "valor": str(q(valor))})
 
-    item("101", "Faltas / atrasos", f"{_fmt(horas_falta)} h" if horas_falta else "", "desconto", total_faltas)
-    item("102", "Adiantamento salarial (vales)", f"{qtd_vales} lanç.", "desconto", total_vales)
+    item("101", "Faltas", "", "desconto", total_faltas, "5060")
+    item("105", "Atrasos", f"{_fmt(horas_atraso)} h", "desconto", total_atrasos, "5050")
+    item("102", "Adiantamento salarial (vales)", f"{qtd_vales} lanç.", "desconto", total_vales, "5098")
+    total_faltas += total_atrasos
 
     # Base de cálculo dos encargos: remuneração (sem benefícios indenizatórios)
     salario_bruto = max(q(salario_proporcional + total_he + total_bonus - total_faltas), ZERO)
@@ -148,7 +156,7 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
     if trabalhador.tipo_contrato == TipoContrato.com_registro:
         faixas, tabela_inss = faixas_do_mes(db, mes_ano)
         inss_empregado = inss_progressivo(salario_bruto, faixas)
-        item("103", "INSS", f"tabela {tabela_inss}", "desconto", inss_empregado)
+        item("103", "INSS", f"tabela {tabela_inss}", "desconto", inss_empregado, "5180")
         partes = {
             "INSS do empregado (descontado no recibo)": inss_empregado,
             f"INSS patronal ({_fmt(tabelas.ALIQ_INSS_PATRONAL * 100)}%)": q(salario_bruto * tabelas.ALIQ_INSS_PATRONAL),

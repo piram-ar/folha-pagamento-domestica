@@ -15,6 +15,7 @@ from .models import PerfilUsuario, Usuario
 from .routers import auth, contratante, eventos, ferias, folha, inss, notificacoes, trabalhadores, usuarios
 from .security import gerar_hash_senha
 from .services.notificacoes import enviar_avisos_do_dia
+from .services.salario import aplicar_reajustes_vigentes
 
 # SQLite não tem tipo DECIMAL nativo; o SQLAlchemy converte e avisa. Os valores são arredondados a 2 casas.
 warnings.filterwarnings("ignore", category=sa_exc.SAWarning, message=".*Decimal objects natively.*")
@@ -51,9 +52,15 @@ def aplicar_migracoes() -> None:
     command.upgrade(cfg, "head")
 
 
-def verificar_avisos() -> bool:
-    """Envia os avisos de pagamento pendentes. Retorna False se o envio falhou."""
+def tarefas_periodicas() -> bool:
+    """Aplica reajustes que entraram em vigor e envia os avisos de pagamento pendentes.
+    Retorna False se o envio de avisos falhou."""
     with SessionLocal() as db:
+        try:
+            aplicar_reajustes_vigentes(db)
+        except Exception as erro:  # noqa: BLE001 - não impede o envio dos avisos
+            log.warning("Falha ao aplicar reajustes salariais: %s", erro)
+            db.rollback()
         try:
             enviar_avisos_do_dia(db)
             return True
@@ -62,10 +69,10 @@ def verificar_avisos() -> bool:
             return False
 
 
-async def verificar_avisos_periodicamente() -> None:
+async def executar_periodicamente() -> None:
     # A cada 10 min; após uma falha (senha errada, sem internet), espera 1 h para tentar de novo
     while True:
-        ok = await to_thread.run_sync(verificar_avisos)
+        ok = await to_thread.run_sync(tarefas_periodicas)
         await asyncio.sleep(600 if ok else 3600)
 
 
@@ -76,9 +83,9 @@ async def lifespan(_app: FastAPI):
     to_thread.current_default_thread_limiter().total_tokens = 4
     aplicar_migracoes()
     criar_admin_inicial()
-    tarefa_avisos = asyncio.create_task(verificar_avisos_periodicamente())
+    tarefa = asyncio.create_task(executar_periodicamente())
     yield
-    tarefa_avisos.cancel()
+    tarefa.cancel()
 
 
 app = FastAPI(

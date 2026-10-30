@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..database import get_db
 from ..deps import exigir_admin, usuario_atual
-from ..models import FolhaPagamento, StatusFolha, Trabalhador
+from ..models import FolhaPagamento, StatusFolha, TipoContrato, Trabalhador
 from ..schemas import CalcularFolhaIn, DiasUteisOut, FolhaOut, MesAno
 from ..services.calculo_folha import gerar_ou_atualizar, vt_por_dia
 from ..services.calendario import dias_uteis
@@ -69,6 +69,29 @@ def sugerir_dias_uteis(mes_ano: MesAno, db: Session = Depends(get_db)):
         )
         for t in trabalhadores
     ]
+
+
+@router.get("/esocial.{formato}")
+def guia_esocial(formato: str, mes_ano: MesAno, db: Session = Depends(get_db)):
+    """Guia para digitar a folha dos empregados com registro no eSocial (que não importa arquivos)."""
+    if formato not in ("pdf", "csv"):
+        raise HTTPException(status_code=404, detail="Formato deve ser pdf ou csv")
+    # Import tardio: fpdf2 só é carregado quando alguém gera documento
+    from ..services import guia_esocial
+
+    folhas = db.scalars(
+        select(FolhaPagamento).join(Trabalhador)
+        .options(joinedload(FolhaPagamento.trabalhador).selectinload(Trabalhador.reajustes))
+        .where(FolhaPagamento.mes_ano == mes_ano, Trabalhador.tipo_contrato == TipoContrato.com_registro)
+        .order_by(Trabalhador.nome)
+    ).all()
+    if formato == "csv":
+        conteudo, tipo = guia_esocial.gerar_csv(folhas), "text/csv; charset=utf-8"
+    else:
+        conteudo, tipo = guia_esocial.gerar_pdf(folhas, mes_ano), "application/pdf"
+    disposicao = "inline" if formato == "pdf" else "attachment"
+    return Response(content=conteudo, media_type=tipo,
+                    headers={"Content-Disposition": f'{disposicao}; filename="esocial_{mes_ano}.{formato}"'})
 
 
 @router.get("/{folha_id}", response_model=FolhaOut)

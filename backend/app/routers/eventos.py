@@ -9,7 +9,8 @@ from ..database import get_db
 from ..deps import usuario_atual
 from ..models import EventoFolha, FolhaPagamento, StatusFolha, TipoEvento
 from ..schemas import EventoIn, EventoOut
-from ..services.calculo_folha import valor_hora_extra, valor_horas_falta
+from ..services.calculo_folha import q, valor_hora_extra, valor_horas_falta
+from ..services.salario import salario_do_mes
 from .trabalhadores import obter_trabalhador
 
 router = APIRouter(prefix="/eventos", tags=["Lançamentos do mês"], dependencies=[Depends(usuario_atual)])
@@ -44,16 +45,20 @@ def criar(dados: EventoIn, db: Session = Depends(get_db)):
 
     valor = dados.valor
     percentual = dados.percentual_adicional
+    descricao = dados.descricao
     if dados.tipo == TipoEvento.hora_extra:
         if not dados.quantidade_horas:
             raise HTTPException(status_code=422, detail="Informe a quantidade de horas extras")
         percentual = percentual if percentual is not None else Decimal("50")
         if valor is None:
-            valor = valor_hora_extra(trabalhador.salario_base, dados.quantidade_horas, percentual)
+            valor = valor_hora_extra(salario_do_mes(trabalhador, dados.mes_ano), dados.quantidade_horas, percentual)
+    elif dados.tipo == TipoEvento.falta and valor is None and dados.quantidade_dias:
+        valor = q(salario_do_mes(trabalhador, dados.mes_ano) / 30 * dados.quantidade_dias)
+        descricao = descricao or f"{dados.quantidade_dias} dia(s) de falta"
     elif dados.tipo == TipoEvento.falta and valor is None:
         if not dados.quantidade_horas:
-            raise HTTPException(status_code=422, detail="Informe as horas de falta ou o valor a descontar")
-        valor = valor_horas_falta(trabalhador.salario_base, dados.quantidade_horas)
+            raise HTTPException(status_code=422, detail="Informe as horas, os dias de falta ou o valor a descontar")
+        valor = valor_horas_falta(salario_do_mes(trabalhador, dados.mes_ano), dados.quantidade_horas)
     if dados.tipo != TipoEvento.hora_extra:
         percentual = None
 
@@ -68,7 +73,7 @@ def criar(dados: EventoIn, db: Session = Depends(get_db)):
         percentual_adicional=percentual,
         valor=valor,
         data_lancamento=dados.data_lancamento or date.today(),
-        descricao=dados.descricao,
+        descricao=descricao,
     )
     db.add(evento)
     db.commit()

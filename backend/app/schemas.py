@@ -10,6 +10,7 @@ from .models import (
     PerfilUsuario,
     SegurancaSmtp,
     StatusFolha,
+    TipoReajuste,
     TipoBeneficio,
     TipoContrato,
     TipoEvento,
@@ -119,6 +120,7 @@ class TrabalhadorBase(BaseModel):
     adiantamento_acordado: bool = False
     dia_pagamento_adiantamento: Optional[DiaPagamento] = None
     adiantamento_dia_util: bool = False
+    funcao: Optional[str] = Field(default=None, max_length=120)
 
     @model_validator(mode="after")
     def _pagamentos(self):
@@ -152,6 +154,7 @@ class TrabalhadorUpdate(BaseModel):
     adiantamento_acordado: Optional[bool] = None
     dia_pagamento_adiantamento: Optional[DiaPagamento] = None
     adiantamento_dia_util: Optional[bool] = None
+    funcao: Optional[str] = Field(default=None, max_length=120)
 
     @field_validator("cpf")
     @classmethod
@@ -194,10 +197,38 @@ class TrabalhadorOut(ORM):
     adiantamento_acordado: bool
     dia_pagamento_adiantamento: Optional[int]
     adiantamento_dia_util: bool
+    funcao: Optional[str]
 
 
 class TrabalhadorDetalheOut(TrabalhadorOut):
     beneficios: list[BeneficioOut] = []
+    reajustes: list["ReajusteOut"] = []
+
+
+# ---------- Reajustes salariais ----------
+
+class ReajusteIn(BaseModel):
+    vigencia: MesAno  # competência a partir da qual vale (AAAA-MM)
+    tipo: TipoReajuste
+    valor: Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2)]
+    motivo: Optional[str] = Field(default=None, max_length=160)
+
+    @model_validator(mode="after")
+    def _limite_percentual(self):
+        if self.tipo == TipoReajuste.percentual and self.valor > 200:
+            raise ValueError("Percentual de reajuste acima de 200%: confira o valor")
+        return self
+
+
+class ReajusteOut(ORM):
+    id: int
+    vigencia: date
+    tipo: TipoReajuste
+    valor_informado: Decimal
+    salario_anterior: Decimal
+    salario_novo: Decimal
+    motivo: Optional[str]
+    criado_em: datetime
 
 
 # ---------- Empregador / contratante ----------
@@ -271,7 +302,8 @@ class EventoIn(BaseModel):
     tipo: TipoEvento
     quantidade_horas: Optional[Annotated[Decimal, Field(gt=0, max_digits=8, decimal_places=2)]] = None
     percentual_adicional: Optional[Annotated[Decimal, Field(ge=0, le=300)]] = None
-    valor: Optional[Valor] = None  # se omitido em hora_extra/falta, é calculado pelas horas
+    valor: Optional[Valor] = None  # se omitido em hora_extra/falta, é calculado pelas horas (ou dias)
+    quantidade_dias: Optional[int] = Field(default=None, ge=1, le=31)  # falta: salário do mês ÷ 30 × dias
     data_lancamento: Optional[date] = None
     descricao: Optional[str] = Field(default=None, max_length=255)
 

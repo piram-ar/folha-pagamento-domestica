@@ -52,6 +52,7 @@ export default function TrabalhadorForm({ inicial, onSalvar, onCancelar, textoBo
         salario_base: String(form.salario_base).replace(',', '.'),
         dia_pagamento_salario: Number(form.dia_pagamento_salario),
         dia_pagamento_adiantamento: form.adiantamento_acordado ? Number(form.dia_pagamento_adiantamento) : null,
+        funcao: form.funcao?.trim() || null,
       });
     } catch (err) {
       setErro(err.message);
@@ -76,9 +77,16 @@ export default function TrabalhadorForm({ inicial, onSalvar, onCancelar, textoBo
             <option value="sem_registro">Sem registro</option>
           </select>
         </Campo>
-        <Campo label="Salário base mensal (R$)">
-          <input type="number" min="0" step="0.01" value={form.salario_base} onChange={set('salario_base')} required />
+        <Campo label="Salário base mensal (R$)"
+          dica={inicial?.reajustes?.length ? 'Há reajustes registrados: altere o salário em Configuração financeira > Reajustes.' : ''}>
+          <input type="number" min="0" step="0.01" value={form.salario_base} onChange={set('salario_base')} required
+            disabled={Boolean(inicial?.reajustes?.length)} />
         </Campo>
+        {form.tipo_contrato === 'com_registro' && (
+          <Campo label="Função" dica="Sai no holerite. Ex.: cuidador(a) de idosos, babá, caseiro(a).">
+            <input value={form.funcao || ''} onChange={set('funcao')} placeholder="Empregado(a) doméstico(a)" maxLength={120} />
+          </Campo>
+        )}
         <Campo label={form.tipo_contrato === 'com_registro' ? 'Data de admissão' : 'Data de início'}>
           <input type="date" value={form.data_admissao} onChange={set('data_admissao')} required />
         </Campo>

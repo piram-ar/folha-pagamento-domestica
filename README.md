@@ -22,8 +22,11 @@ folha-domestica/
 │           ├── inss.py           # tabela progressiva do INSS por vigência (cadastrada na tela)
 │           ├── pagamentos.py     # datas de pagamento (N-ésimo dia útil / dia do mês)
 │           ├── notificacoes.py   # calendário .ics/.vcs e avisos por e-mail
+│           ├── salario.py        # salário de cada competência (histórico de reajustes)
+│           ├── esocial.py        # rubricas do eSocial doméstico
+│           ├── guia_esocial.py   # guia de lançamento da folha no eSocial (PDF/CSV)
 │           ├── ferias.py         # períodos aquisitivos
-│           └── recibo_pdf.py     # holerite em PDF
+│           └── recibo_pdf.py     # holerite (com vínculo) e recibo de serviços (sem vínculo)
 └── frontend/                 # React + Vite, nginx.conf faz proxy de /api
 ```
 
@@ -131,6 +134,27 @@ Folha **fechada** congela os valores e bloqueia lançamentos do mês; apenas adm
 > Quando o governo publicar a tabela do ano (normalmente em janeiro), cadastre uma nova vigência: cada folha
 > usa a tabela válida no seu mês, e folhas fechadas não mudam. IRRF não é calculado.
 > Os valores são estimativas para controle: a guia oficial é sempre a emitida pelo eSocial.
+
+## Reajustes salariais
+
+Na aba **Configuração financeira** do trabalhador, registre aumentos por **percentual**, **acréscimo em R$**
+ou **novo salário**, a partir de uma competência. Cada folha usa o salário vigente no seu mês (folhas
+anteriores ao reajuste não mudam), e um reajuste futuro passa a valer sozinho quando o mês chega. Os
+reajustes entram sempre no fim do histórico e só o último pode ser excluído; meses com folha fechada
+ficam protegidos.
+
+## Recibos
+
+- **Com vínculo (CLT):** holerite no formato do recibo de salário do eSocial: empregador, empregado, função,
+  rubricas com o código do eSocial (ex.: `eSocial1000` Salário, `eSocial5180` INSS), bases de cálculo
+  (INSS, FGTS, IRRF) e data preenchida pelo empregado. A via do empregador traz o demonstrativo dos valores
+  devidos (estimativa da DAE).
+- **Sem vínculo:** recibo simples de prestação de serviços domésticos ("Eu, ..., CPF ..., declaro que recebi
+  de ... a importância de R$ ... (valor por extenso)..."), com as duas vias na mesma folha A4.
+
+**eSocial:** o módulo do empregador doméstico não aceita importação de arquivos. Na tela da folha, a
+**Guia de lançamento** (PDF ou CSV) lista, por empregado, as rubricas e os valores a digitar em
+Folha/Recolhimento. As rubricas seguem o Manual do eSocial do Empregador Doméstico (versão 13/08/2026).
 
 ## Avisos de pagamento
 

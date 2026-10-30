@@ -61,11 +61,8 @@ export default function Lancamentos() {
     } else if (tipo === 'falta' && form.faltaPor === 'horas') {
       dados = { ...base, quantidade_horas: num(form.horas) };
     } else if (tipo === 'falta') {
-      dados = {
-        ...base,
-        valor: ((salario / 30) * Number(form.dias)).toFixed(2),
-        descricao: form.descricao || `${form.dias} dia(s) de falta`,
-      };
+      // O servidor calcula pelo salário do mês do lançamento (considera reajustes)
+      dados = { ...base, quantidade_dias: Number(form.dias) };
     } else {
       dados = { ...base, valor: num(form.valor) };
     }

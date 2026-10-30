@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { abrirPdf, api } from '../api';
+import { abrirPdf, api, baixarArquivo } from '../api';
 import { useAuth } from '../AuthContext';
 import { Alerta, Campo, Modal, SituacaoFolha, useTrabalhadores } from '../components/ui';
 import { brl, mesAtual, mesExtenso, mesLongo, ROTULOS } from '../utils';
@@ -140,6 +140,9 @@ export default function Folha() {
   const pdf = (f) => abrirPdf(`/folha/${f.id}/recibo.pdf`).catch((e) => setMsg({ erro: e.message }));
 
   const total = (campo) => folhas.reduce((s, f) => s + Number(f[campo]), 0);
+  const comRegistro = folhas.filter((f) => f.tipo_contrato === 'com_registro');
+  const guiaPdf = () => abrirPdf(`/folha/esocial.pdf?mes_ano=${mes}`).catch((e) => setMsg({ erro: e.message }));
+  const guiaCsv = () => baixarArquivo(`/folha/esocial.csv?mes_ano=${mes}`, `esocial_${mes}.csv`).catch((e) => setMsg({ erro: e.message }));
 
   return (
     <>
@@ -202,7 +205,11 @@ export default function Folha() {
                     {!f && <button className="btn pequeno primario" disabled={ocupado} onClick={() => calcular(t)}>Calcular</button>}
                     {f && !fechada && <button className="btn pequeno" disabled={ocupado} onClick={() => calcular(t)}>Recalcular</button>}
                     {f && !fechada && <button className="btn pequeno sucesso" disabled={ocupado} onClick={() => fechar(f)}>Fechar</button>}
-                    {fechada && <button className="btn pequeno primario" onClick={() => pdf(f)}>Recibo</button>}
+                    {fechada && (
+                      <button className="btn pequeno primario" onClick={() => pdf(f)}>
+                        {t.tipo_contrato === 'com_registro' ? 'Holerite' : 'Recibo'}
+                      </button>
+                    )}
                     {f && <button className="btn pequeno" onClick={() => setDetalhe(f)}>Detalhes</button>}
                   </td>
                 </tr>
@@ -222,6 +229,21 @@ export default function Folha() {
           )}
         </table>
       </div>
+
+      {comRegistro.length > 0 && (
+        <section className="painel espaco-acima">
+          <h3>Lançar no eSocial</h3>
+          <p className="dica">
+            O eSocial do empregador doméstico não aceita importação de arquivos: a folha é digitada no portal.
+            A guia traz, para cada empregado com registro, as rubricas do eSocial e os valores a informar em
+            Folha/Recolhimento. Salário e INSS o eSocial calcula sozinho; use-os para conferir.
+          </p>
+          <div className="acoes">
+            <button className="btn" onClick={guiaPdf}>Guia de lançamento (PDF)</button>
+            <button className="btn" onClick={guiaCsv}>Planilha (CSV)</button>
+          </div>
+        </section>
+      )}
 
       {detalhe && (
         <DetalheFolha

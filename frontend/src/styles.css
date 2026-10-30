@@ -458,6 +458,8 @@ tfoot tr.destaque td { background: var(--verde-claro); font-size: 1.08rem; }
 .regra-pagamento input { width: 76px; flex: none; }
 .regra-pagamento select { flex: 1; }
 
+.salario-atual { font-size: 1.15rem; margin: 0 0 8px; }
+
 /* ---------- Tabela do INSS ---------- */
 .faixas-edicao { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .faixa-linha { display: grid; grid-template-columns: 32px minmax(0, 1fr) minmax(0, 140px) auto; gap: 12px; align-items: end; }

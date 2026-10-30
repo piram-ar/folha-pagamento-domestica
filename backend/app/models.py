@@ -118,6 +118,7 @@ class Trabalhador(Base):
     adiantamento_acordado: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     dia_pagamento_adiantamento: Mapped[Optional[int]] = mapped_column(Integer)
     adiantamento_dia_util: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    funcao: Mapped[Optional[str]] = mapped_column(String(120))  # cargo impresso no holerite
 
     beneficios: Mapped[list["BeneficioFixo"]] = relationship(
         back_populates="trabalhador", cascade="all, delete-orphan"
@@ -132,6 +133,9 @@ class Trabalhador(Base):
     )
     folhas: Mapped[list["FolhaPagamento"]] = relationship(
         back_populates="trabalhador", cascade="all, delete-orphan"
+    )
+    reajustes: Mapped[list["ReajusteSalarial"]] = relationship(
+        back_populates="trabalhador", cascade="all, delete-orphan", order_by="ReajusteSalarial.vigencia"
     )
 
 
@@ -307,3 +311,31 @@ class NotificacaoEnviada(Base):
     data_pagamento: Mapped[date] = mapped_column(Date)
     antecedencia: Mapped[int] = mapped_column(Integer)
     enviado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
+
+
+class TipoReajuste(str, enum.Enum):
+    percentual = "percentual"      # ex.: 5,5%
+    valor = "valor"                # acréscimo em R$ (ex.: + R$ 100,00)
+    novo_salario = "novo_salario"  # informa diretamente o novo salário
+
+
+class ReajusteSalarial(Base):
+    """Histórico de aumentos. O salário de cada competência é o do último reajuste já vigente nela.
+
+    `salario_anterior` e `salario_novo` ficam gravados para o histórico não depender de recálculos.
+    """
+
+    __tablename__ = "reajustes_salariais"
+    __table_args__ = (UniqueConstraint("trabalhador_id", "vigencia"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trabalhador_id: Mapped[int] = mapped_column(ForeignKey("trabalhadores.id", ondelete="CASCADE"), index=True)
+    vigencia: Mapped[date] = mapped_column(Date)  # sempre dia 1: vale para a competência inteira
+    tipo: Mapped[TipoReajuste] = mapped_column(_enum(TipoReajuste))
+    valor_informado: Mapped[Decimal] = mapped_column(Numeric(12, 2))  # % ou R$, conforme o tipo
+    salario_anterior: Mapped[Decimal] = mapped_column(Dinheiro)
+    salario_novo: Mapped[Decimal] = mapped_column(Dinheiro)
+    motivo: Mapped[Optional[str]] = mapped_column(String(160))
+    criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
+
+    trabalhador: Mapped[Trabalhador] = relationship(back_populates="reajustes")

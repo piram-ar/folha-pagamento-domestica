@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
+import Reajustes from '../components/Reajustes';
 import TrabalhadorForm from '../components/TrabalhadorForm';
 import { Alerta, Badge, Campo } from '../components/ui';
 import { brl, cpfFmt, DIAS_SEMANA, ROTULOS, vtPorDia } from '../utils';
@@ -56,16 +57,25 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
       <Alerta {...msg} />
       <section className="painel">
         <h3>Salário base</h3>
-        <form className="linha-form" onSubmit={salvarSalario}>
-          <Campo label="Salário mensal (R$)">
-            <input type="number" min="0" step="0.01" value={salario} onChange={(e) => setSalario(e.target.value)} required />
-          </Campo>
-          <button className="btn primario">Salvar salário</button>
-        </form>
+        {trabalhador.reajustes?.length ? (
+          <p className="salario-atual">Salário atual: <strong>{brl(trabalhador.salario_base)}</strong></p>
+        ) : (
+          <>
+            <form className="linha-form" onSubmit={salvarSalario}>
+              <Campo label="Salário mensal (R$)">
+                <input type="number" min="0" step="0.01" value={salario} onChange={(e) => setSalario(e.target.value)} required />
+              </Campo>
+              <button className="btn primario">Corrigir salário</button>
+            </form>
+            <p className="dica">Use este campo só para corrigir o valor cadastrado. Aumentos devem ser registrados em Reajustes salariais, abaixo, para manter o histórico.</p>
+          </>
+        )}
         <p className="dica">
           Valor-hora (divisor 220h): <strong>{brl(valorHora)}</strong> · Hora extra 50%: {brl(valorHora * 1.5)} · 100%: {brl(valorHora * 2)}
         </p>
       </section>
+
+      <Reajustes trabalhador={trabalhador} onAtualizar={onAtualizar} setMsg={setMsg} />
 
       <section className="painel">
         <h3>Benefícios fixos mensais</h3>
@@ -184,7 +194,7 @@ export default function TrabalhadorDetalhe() {
           <TrabalhadorForm key={trabalhador.id} inicial={trabalhador} onSalvar={salvarDados} />
         </section>
       ) : (
-        <ConfiguracaoFinanceira key={trabalhador.salario_base} trabalhador={trabalhador} onAtualizar={carregar} />
+        <ConfiguracaoFinanceira key={`${trabalhador.salario_base}-${trabalhador.reajustes?.length}`} trabalhador={trabalhador} onAtualizar={carregar} />
       )}
     </>
   );
