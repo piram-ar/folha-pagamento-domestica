@@ -1,0 +1,41 @@
+services:
+  backend:
+    build: ./backend
+    image: folha-domestica-backend:latest
+    container_name: folha-backend
+    # Sobe automaticamente após reboot ou queda de energia do Raspberry Pi
+    restart: always
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/database.db
+      TZ: America/Sao_Paulo
+    volumes:
+      # Persistência: o arquivo ./data/database.db fica no cartão SD/SSD do Pi.
+      # Mapeia-se a pasta (e não só o arquivo) porque o SQLite em modo WAL
+      # cria database.db-wal e database.db-shm ao lado do banco.
+      - ./data:/data
+    expose:
+      - "8000"
+    # Sem healthcheck: ele abria um novo processo Python a cada 30 s (~0,5 s de CPU e
+    # ~15 MB de RAM no Pi 3) e nada dependia dele; o restart: always já cobre quedas.
+    # Teto de memória: protege o sistema do Pi (ignorado se o kernel não tiver cgroup de memória).
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }   # evita encher o cartão SD com logs
+
+  frontend:
+    build: ./frontend
+    image: folha-domestica-frontend:latest
+    container_name: folha-frontend
+    restart: always
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    environment:
+      TZ: America/Sao_Paulo
+    depends_on:
+      - backend
+    mem_limit: 64m
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
