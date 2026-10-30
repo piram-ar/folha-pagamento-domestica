@@ -1,10 +1,12 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import Layout from './components/Layout';
+import Avisos from './pages/Avisos';
 import Contratante from './pages/Contratante';
 import Dashboard from './pages/Dashboard';
 import Ferias from './pages/Ferias';
 import Folha from './pages/Folha';
+import Inss from './pages/Inss';
 import Lancamentos from './pages/Lancamentos';
 import Login from './pages/Login';
 import TrabalhadorDetalhe from './pages/TrabalhadorDetalhe';
@@ -31,6 +33,8 @@ export default function App() {
         <Route path="folha" element={<Folha />} />
         <Route path="ferias" element={<Ferias />} />
         <Route path="contratante" element={<Contratante />} />
+        <Route path="avisos" element={<Avisos />} />
+        <Route path="inss" element={<Inss />} />
         <Route path="usuarios" element={<Protegida somenteAdmin><Usuarios /></Protegida>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

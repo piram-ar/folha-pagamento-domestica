@@ -60,3 +60,15 @@ export async function abrirPdf(path) {
   else window.location.href = url;
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
+
+/** Baixa um arquivo autenticado (ex.: calendário .ics) com o nome indicado. */
+export async function baixarArquivo(path, nome) {
+  const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+  if (!res.ok) throw new Error('Não foi possível gerar o arquivo');
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nome;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}

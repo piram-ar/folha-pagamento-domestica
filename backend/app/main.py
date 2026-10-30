@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import warnings
 from contextlib import asynccontextmanager
@@ -11,8 +12,9 @@ from sqlalchemy import func, select
 from . import config
 from .database import SessionLocal
 from .models import PerfilUsuario, Usuario
-from .routers import auth, contratante, eventos, ferias, folha, trabalhadores, usuarios
+from .routers import auth, contratante, eventos, ferias, folha, inss, notificacoes, trabalhadores, usuarios
 from .security import gerar_hash_senha
+from .services.notificacoes import enviar_avisos_do_dia
 
 # SQLite não tem tipo DECIMAL nativo; o SQLAlchemy converte e avisa. Os valores são arredondados a 2 casas.
 warnings.filterwarnings("ignore", category=sa_exc.SAWarning, message=".*Decimal objects natively.*")
@@ -49,6 +51,24 @@ def aplicar_migracoes() -> None:
     command.upgrade(cfg, "head")
 
 
+def verificar_avisos() -> bool:
+    """Envia os avisos de pagamento pendentes. Retorna False se o envio falhou."""
+    with SessionLocal() as db:
+        try:
+            enviar_avisos_do_dia(db)
+            return True
+        except Exception as erro:  # noqa: BLE001 - o erro fica registrado e aparece na tela de avisos
+            log.warning("Falha ao enviar avisos de pagamento: %s", erro)
+            return False
+
+
+async def verificar_avisos_periodicamente() -> None:
+    # A cada 10 min; após uma falha (senha errada, sem internet), espera 1 h para tentar de novo
+    while True:
+        ok = await to_thread.run_sync(verificar_avisos)
+        await asyncio.sleep(600 if ok else 3600)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Rotas síncronas rodam num pool de threads (padrão: 40). Com SQLite e 1 GB de RAM,
@@ -56,7 +76,9 @@ async def lifespan(_app: FastAPI):
     to_thread.current_default_thread_limiter().total_tokens = 4
     aplicar_migracoes()
     criar_admin_inicial()
+    tarefa_avisos = asyncio.create_task(verificar_avisos_periodicamente())
     yield
+    tarefa_avisos.cancel()
 
 
 app = FastAPI(
@@ -64,8 +86,9 @@ app = FastAPI(
     docs_url="/api/docs", openapi_url="/api/openapi.json",
 )
 
-for modulo in (auth, usuarios, contratante, trabalhadores, eventos, folha, ferias):
+for modulo in (auth, usuarios, contratante, trabalhadores, eventos, folha, ferias, inss, notificacoes):
     app.include_router(modulo.router, prefix="/api")
+app.include_router(notificacoes.publico, prefix="/api")
 
 
 @app.get("/api/health", tags=["Sistema"])

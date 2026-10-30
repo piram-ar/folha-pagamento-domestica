@@ -47,7 +47,14 @@ export const DIAS_SEMANA = [['1', 'Seg'], ['2', 'Ter'], ['3', 'Qua'], ['4', 'Qui
 /** Vale-transporte pago (no salário ou à parte) é informado por dia; a cota descontada é mensal. */
 export const vtPorDia = (b) => b.tipo === 'vale_transporte' && b.natureza !== 'desconto';
 
+/** "5º dia útil" / "dia 20" */
+export const regraPagamentoTexto = (dia, util) => (util ? `${dia}º dia útil` : `dia ${dia}`);
+
+const DIAS_SEMANA_LONGO = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+export const diaSemana = (iso) => DIAS_SEMANA_LONGO[new Date(`${iso}T12:00:00`).getDay()];
+
 export const ROTULOS = {
+  pagamento: { salario: 'Salário', adiantamento: 'Adiantamento' },
   tipo_contrato: { com_registro: 'Com registro (CLT)', sem_registro: 'Sem registro' },
   perfil: { admin: 'Administrador', padrao: 'Padrão' },
   beneficio: {

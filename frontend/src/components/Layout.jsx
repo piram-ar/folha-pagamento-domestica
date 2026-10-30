@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { SeletorTema } from '../tema';
 import { Modal } from './ui';
 
 // Rotina do mês: aparecem no menu inferior do celular
@@ -13,7 +14,9 @@ const PRINCIPAIS = [
 // Cadastros: ficam em "Mais" no celular
 const CADASTROS = [
   { to: '/trabalhadores', label: 'Trabalhadores' },
+  { to: '/avisos', label: 'Avisos de pagamento' },
   { to: '/contratante', label: 'Empregador / contratante' },
+  { to: '/inss', label: 'Tabela do INSS' },
 ];
 
 function Icone({ d }) {
@@ -41,6 +44,7 @@ export default function Layout() {
           {cadastros.map((l) => <NavLink key={l.to} to={l.to}>{l.label}</NavLink>)}
         </nav>
         <div className="sessao">
+          <SeletorTema />
           <strong>{usuario.nome}</strong>
           <button className="btn-link" onClick={logout}>Sair</button>
         </div>
@@ -68,6 +72,12 @@ export default function Layout() {
         <Modal titulo="Mais opções" onClose={() => setMaisAberto(false)}>
           <div className="folha-mais" onClick={() => setMaisAberto(false)}>
             {cadastros.map((l) => <Link key={l.to} to={l.to}>{l.label}</Link>)}
+          </div>
+          <div className="tema-mais">
+            <span>Aparência</span>
+            <SeletorTema />
+          </div>
+          <div className="folha-mais">
             <button className="sair" onClick={logout}>Sair ({usuario.nome})</button>
           </div>
         </Modal>

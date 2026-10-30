@@ -15,10 +15,13 @@ folha-domestica/
 │   └── app/
 │       ├── models.py         # modelos SQLAlchemy (tabelas)
 │       ├── schemas.py        # validação Pydantic (CPF, mês, valores)
-│       ├── routers/          # auth, usuarios, trabalhadores, eventos, folha, ferias
+│       ├── routers/          # auth, usuarios, trabalhadores, eventos, folha, ferias, inss, notificacoes
 │       └── services/
 │           ├── calculo_folha.py  # motor de cálculo
-│           ├── tabelas.py        # INSS, FGTS, alíquotas (atualizar anualmente)
+│           ├── tabelas.py        # alíquotas de FGTS/encargos e tabela INSS de reserva
+│           ├── inss.py           # tabela progressiva do INSS por vigência (cadastrada na tela)
+│           ├── pagamentos.py     # datas de pagamento (N-ésimo dia útil / dia do mês)
+│           ├── notificacoes.py   # calendário .ics/.vcs e avisos por e-mail
 │           ├── ferias.py         # períodos aquisitivos
 │           └── recibo_pdf.py     # holerite em PDF
 └── frontend/                 # React + Vite, nginx.conf faz proxy de /api
@@ -124,9 +127,28 @@ cd frontend && npm install && npm run dev                                    # h
 
 Folha **fechada** congela os valores e bloqueia lançamentos do mês; apenas admins podem reabri-la.
 
-> ⚠️ **Tabela do INSS:** o padrão embutido é a de 2025. Atualize `TABELA_INSS_JSON` no `.env`
-> (ou `backend/app/services/tabelas.py`) quando sair a tabela do ano. IRRF não é calculado.
+> ⚠️ **Tabela do INSS:** cadastrada na tela **Tabela do INSS**, uma por vigência (vem com a de 2025).
+> Quando o governo publicar a tabela do ano (normalmente em janeiro), cadastre uma nova vigência: cada folha
+> usa a tabela válida no seu mês, e folhas fechadas não mudam. IRRF não é calculado.
 > Os valores são estimativas para controle: a guia oficial é sempre a emitida pelo eSocial.
+
+## Avisos de pagamento
+
+No cadastro de cada trabalhador ficam as datas do **salário** (ex.: 5º dia útil) e, se houver acordo, do
+**adiantamento** (ex.: dia 20). Dia útil conta de segunda a sábado, sem feriados nacionais; um dia fixo que
+cair em domingo ou feriado é antecipado. A tela **Avisos de pagamento** oferece:
+
+- **Agenda (.ics):** eventos que se repetem todo mês, com alarmes na antecedência escolhida (ex.: 3 e 1 dia
+  antes). Há também o **.vcs** para agendas antigas (próximos 12 meses) e um **link de assinatura** que se
+  atualiza sozinho (só dentro da rede de casa).
+- **E-mail:** o Pi verifica a cada 10 minutos e envia um único e-mail com os avisos do dia a partir do horário
+  escolhido. Se estiver desligado na hora, envia quando voltar, sem repetir avisos. Gmail/Outlook exigem uma
+  *senha de app*. A senha SMTP fica no banco do Pi e nunca é devolvida para a tela.
+
+## Aparência
+
+Modo claro, escuro ou conforme o sistema, no rodapé do menu lateral (ou em **Mais** no celular). A escolha
+vale por aparelho.
 
 ## Licença
 

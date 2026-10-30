@@ -3,15 +3,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from .models import (
     NaturezaBeneficio,
     PerfilUsuario,
+    SegurancaSmtp,
     StatusFolha,
     TipoBeneficio,
     TipoContrato,
     TipoEvento,
+    TipoPagamento,
 )
 
 MesAno = Annotated[str, StringConstraints(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
@@ -90,6 +92,20 @@ def _validar_dias_semana(v: str) -> str:
     return "".join(dias)
 
 
+DiaPagamento = Annotated[int, Field(ge=1, le=31)]
+
+
+def validar_dias_pagamento(m):
+    """Dia útil vai até 24 (fevereiro tem 24 dias de segunda a sábado); adiantamento acordado exige o dia."""
+    for dia, util, rotulo in ((m.dia_pagamento_salario, m.salario_dia_util, "salário"),
+                              (m.dia_pagamento_adiantamento, m.adiantamento_dia_util, "adiantamento")):
+        if dia and util and dia > 24:
+            raise ValueError(f"Dia útil de pagamento do {rotulo} deve ser de 1 a 24")
+    if m.adiantamento_acordado and not m.dia_pagamento_adiantamento:
+        raise ValueError("Informe o dia de pagamento do adiantamento")
+    return m
+
+
 class TrabalhadorBase(BaseModel):
     nome: str = Field(min_length=2, max_length=120)
     cpf: str
@@ -98,6 +114,15 @@ class TrabalhadorBase(BaseModel):
     data_admissao: date
     ativo: bool = True
     dias_semana_trabalho: str = "12345"
+    dia_pagamento_salario: DiaPagamento = 5
+    salario_dia_util: bool = True
+    adiantamento_acordado: bool = False
+    dia_pagamento_adiantamento: Optional[DiaPagamento] = None
+    adiantamento_dia_util: bool = False
+
+    @model_validator(mode="after")
+    def _pagamentos(self):
+        return validar_dias_pagamento(self)
 
     @field_validator("cpf")
     @classmethod
@@ -122,6 +147,11 @@ class TrabalhadorUpdate(BaseModel):
     data_admissao: Optional[date] = None
     ativo: Optional[bool] = None
     dias_semana_trabalho: Optional[str] = None
+    dia_pagamento_salario: Optional[DiaPagamento] = None
+    salario_dia_util: Optional[bool] = None
+    adiantamento_acordado: Optional[bool] = None
+    dia_pagamento_adiantamento: Optional[DiaPagamento] = None
+    adiantamento_dia_util: Optional[bool] = None
 
     @field_validator("cpf")
     @classmethod
@@ -159,6 +189,11 @@ class TrabalhadorOut(ORM):
     data_admissao: date
     ativo: bool
     dias_semana_trabalho: str
+    dia_pagamento_salario: int
+    salario_dia_util: bool
+    adiantamento_acordado: bool
+    dia_pagamento_adiantamento: Optional[int]
+    adiantamento_dia_util: bool
 
 
 class TrabalhadorDetalheOut(TrabalhadorOut):
@@ -337,3 +372,96 @@ class FeriasTrabalhadorOut(BaseModel):
     periodo_atual: Optional[PeriodoFeriasOut]
     alertas: list[str]
     periodos: list[PeriodoFeriasOut]
+
+
+# ---------- Tabela do INSS ----------
+
+class FaixaInssIn(BaseModel):
+    teto: Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2)]
+    aliquota: Annotated[Decimal, Field(gt=0, le=100, max_digits=5, decimal_places=2)]  # em %
+
+
+class FaixaInssOut(ORM):
+    teto: Decimal
+    aliquota: Decimal
+
+
+class TabelaInssIn(BaseModel):
+    vigencia_inicio: date
+    descricao: Optional[str] = Field(default=None, max_length=120)
+    faixas: list[FaixaInssIn] = Field(min_length=1, max_length=10)
+
+    @field_validator("vigencia_inicio")
+    @classmethod
+    def _primeiro_dia(cls, v: date) -> date:
+        return v.replace(day=1)  # a tabela vale para a competência inteira
+
+    @field_validator("faixas")
+    @classmethod
+    def _crescentes(cls, faixas: list[FaixaInssIn]) -> list[FaixaInssIn]:
+        tetos = [f.teto for f in faixas]
+        if tetos != sorted(tetos) or len(set(tetos)) != len(tetos):
+            raise ValueError("Os tetos das faixas devem ser crescentes e diferentes entre si")
+        return faixas
+
+
+class TabelaInssOut(ORM):
+    id: int
+    vigencia_inicio: date
+    descricao: Optional[str]
+    faixas: list[FaixaInssOut]
+    vigente: bool = False
+
+
+# ---------- Avisos de pagamento ----------
+
+class ConfigNotificacoesIn(BaseModel):
+    antecedencias: str = Field(default="3,1", max_length=40)
+    email_ativo: bool = False
+    destinatarios: Optional[str] = Field(default=None, max_length=500)
+    hora_envio: int = Field(default=8, ge=0, le=23)
+    smtp_host: Optional[str] = Field(default=None, max_length=160)
+    smtp_porta: int = Field(default=587, ge=1, le=65535)
+    smtp_seguranca: SegurancaSmtp = SegurancaSmtp.starttls
+    smtp_usuario: Optional[str] = Field(default=None, max_length=160)
+    smtp_senha: Optional[str] = Field(default=None, max_length=255)  # vazio = manter a atual
+    smtp_remetente: Optional[str] = Field(default=None, max_length=160)
+
+    @field_validator("antecedencias")
+    @classmethod
+    def _antecedencias(cls, v: str) -> str:
+        partes = [p.strip() for p in v.replace(";", ",").split(",") if p.strip()]
+        if not partes or any(not p.isdigit() or int(p) > 60 for p in partes):
+            raise ValueError("Antecedências: números de 0 a 60 separados por vírgula (ex.: 3,1)")
+        return ",".join(str(n) for n in sorted({int(p) for p in partes}, reverse=True))
+
+    @model_validator(mode="after")
+    def _email_completo(self):
+        if self.email_ativo and (not self.smtp_host or not (self.destinatarios or "").strip()):
+            raise ValueError("Para ativar o e-mail, informe o servidor SMTP e ao menos um destinatário")
+        return self
+
+
+class ConfigNotificacoesOut(ORM):
+    antecedencias: str
+    email_ativo: bool
+    destinatarios: Optional[str]
+    hora_envio: int
+    smtp_host: Optional[str]
+    smtp_porta: int
+    smtp_seguranca: SegurancaSmtp
+    smtp_usuario: Optional[str]
+    smtp_senha_definida: bool
+    smtp_remetente: Optional[str]
+    token_calendario: Optional[str]
+    ultimo_envio_em: Optional[datetime]
+    ultimo_erro: Optional[str]
+
+
+class ProximoPagamentoOut(BaseModel):
+    trabalhador_id: int
+    trabalhador_nome: str
+    tipo: TipoPagamento
+    data: date
+    competencia: str
+    dias_faltando: int

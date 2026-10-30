@@ -12,6 +12,7 @@ from ..schemas import (
     TrabalhadorDetalheOut,
     TrabalhadorOut,
     TrabalhadorUpdate,
+    validar_dias_pagamento,
 )
 
 router = APIRouter(prefix="/trabalhadores", tags=["Trabalhadores"], dependencies=[Depends(usuario_atual)])
@@ -68,6 +69,11 @@ def atualizar(trabalhador_id: int, dados: TrabalhadorUpdate, db: Session = Depen
         raise HTTPException(status_code=409, detail="CPF já cadastrado")
     for campo, valor in campos.items():
         setattr(trabalhador, campo, valor)
+    try:  # a atualização é parcial: valida as datas de pagamento já combinadas com o cadastro
+        validar_dias_pagamento(trabalhador)
+    except ValueError as erro:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(erro))
     db.commit()
     db.refresh(trabalhador)
     return trabalhador

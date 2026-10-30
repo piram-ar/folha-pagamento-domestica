@@ -19,6 +19,7 @@ from ..models import (
 )
 from . import tabelas
 from .calendario import dias_uteis as calcular_dias_uteis
+from .inss import faixas_do_mes, inss_progressivo
 
 CENTAVO = Decimal("0.01")
 ZERO = Decimal("0")
@@ -63,16 +64,6 @@ def vt_por_dia(beneficio) -> bool:
     A cota descontada do empregado (natureza "desconto") continua sendo um valor mensal fixo.
     """
     return beneficio.tipo == TipoBeneficio.vale_transporte and beneficio.natureza != NaturezaBeneficio.desconto
-
-
-def inss_progressivo(base: Decimal) -> Decimal:
-    total, piso = ZERO, ZERO
-    for teto, aliquota in tabelas.FAIXAS_INSS:
-        if base <= piso:
-            break
-        total += (min(base, teto) - piso) * aliquota
-        piso = teto
-    return q(total)
 
 
 def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhados: int,
@@ -153,10 +144,11 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
     salario_bruto = max(q(salario_proporcional + total_he + total_bonus - total_faltas), ZERO)
 
     inss_empregado = ZERO
-    encargos: dict[str, str] = {}
+    tabela_inss = None
     if trabalhador.tipo_contrato == TipoContrato.com_registro:
-        inss_empregado = inss_progressivo(salario_bruto)
-        item("103", "INSS", "tabela progressiva", "desconto", inss_empregado)
+        faixas, tabela_inss = faixas_do_mes(db, mes_ano)
+        inss_empregado = inss_progressivo(salario_bruto, faixas)
+        item("103", "INSS", f"tabela {tabela_inss}", "desconto", inss_empregado)
         partes = {
             "INSS do empregado (descontado no recibo)": inss_empregado,
             f"INSS patronal ({_fmt(tabelas.ALIQ_INSS_PATRONAL * 100)}%)": q(salario_bruto * tabelas.ALIQ_INSS_PATRONAL),
@@ -203,6 +195,7 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
             "beneficios_informativos": informativos,
             "encargos": {"titulo": titulo_encargos, "itens": encargos, "total": str(total_encargos)},
             "valor_hora": str(q(valor_hora(salario_base))),
+            "tabela_inss": tabela_inss,
         },
     }
 

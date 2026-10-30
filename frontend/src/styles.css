@@ -26,6 +26,18 @@
   --carimbo-claro: #f8e9e7;
   --ambar: #845600;
   --ambar-claro: #fbf1dc;
+  --acao: #1e5a43;
+  --acao-hover: #154232;
+  --acao-texto: #ffffff;
+  --tinta-forte: #000000;
+  --neutro-claro: #edf0ea;
+  --azul: #2f4a63;
+  --azul-claro: #e6ecf2;
+  --realce: rgba(31, 42, 36, .05);
+  --realce-linha: #fafbf8;
+  --carimbo-borda: #e3c1bd;
+  --foco: rgba(30, 90, 67, .18);
+  color-scheme: light;
 
   --raio: 6px;
   --altura-controle: 42px;
@@ -38,6 +50,64 @@
   background: var(--papel);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Modo escuro: escolhido na interface (data-theme) ou, em "Sistema", conforme o aparelho */
+:root[data-theme='dark'] {
+    --papel: #121815;
+    --superficie: #1a211d;
+    --linha: #29322d;
+    --linha-forte: #3b4640;
+    --tinta: #e4ebe6;
+    --suave: #9eaba3;
+    --verde: #7cc4a0;
+    --verde-escuro: #a9dcc2;
+    --verde-claro: #1d3329;
+    --carimbo: #ef8f86;
+    --carimbo-claro: #3a201e;
+    --ambar: #e5b75c;
+    --ambar-claro: #332a12;
+    --acao: #2e7a59;
+    --acao-hover: #3a8d69;
+    --acao-texto: #ffffff;
+    --tinta-forte: #ffffff;
+    --neutro-claro: #252d29;
+    --azul: #a9c3dc;
+    --azul-claro: #1e2a36;
+    --realce: rgba(255, 255, 255, .05);
+    --realce-linha: rgba(255, 255, 255, .03);
+    --carimbo-borda: #5c312d;
+    --foco: rgba(124, 196, 160, .25);
+    color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+      --papel: #121815;
+      --superficie: #1a211d;
+      --linha: #29322d;
+      --linha-forte: #3b4640;
+      --tinta: #e4ebe6;
+      --suave: #9eaba3;
+      --verde: #7cc4a0;
+      --verde-escuro: #a9dcc2;
+      --verde-claro: #1d3329;
+      --carimbo: #ef8f86;
+      --carimbo-claro: #3a201e;
+      --ambar: #e5b75c;
+      --ambar-claro: #332a12;
+      --acao: #2e7a59;
+      --acao-hover: #3a8d69;
+      --acao-texto: #ffffff;
+      --tinta-forte: #ffffff;
+      --neutro-claro: #252d29;
+      --azul: #a9c3dc;
+      --azul-claro: #1e2a36;
+      --realce: rgba(255, 255, 255, .05);
+      --realce-linha: rgba(255, 255, 255, .03);
+      --carimbo-borda: #5c312d;
+      --foco: rgba(124, 196, 160, .25);
+      color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -79,7 +149,7 @@ strong { font-weight: 650; }
   padding: 9px 10px; border-radius: var(--raio);
   color: var(--suave); text-decoration: none; font-weight: 500;
 }
-.lateral nav a:hover { color: var(--tinta); background: rgba(31, 42, 36, .05); }
+.lateral nav a:hover { color: var(--tinta); background: var(--realce); }
 .lateral nav a.active { color: var(--tinta); font-weight: 650; background: var(--verde-claro); }
 .lateral .grupo-secundario { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--linha); }
 .lateral .sessao { margin-top: auto; padding: 0 10px; font-size: .9rem; color: var(--suave); }
@@ -160,12 +230,12 @@ strong { font-weight: 650; }
 }
 .btn:hover { background: var(--papel); color: var(--tinta); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn.primario { background: var(--verde); border-color: var(--verde); color: #fff; }
-.btn.primario:hover { background: var(--verde-escuro); border-color: var(--verde-escuro); }
+.btn.primario { background: var(--acao); border-color: var(--acao); color: var(--acao-texto); }
+.btn.primario:hover { background: var(--acao-hover); border-color: var(--acao-hover); color: var(--acao-texto); }
 /* "Fechar" é um ato definitivo: tinta cheia, distinto do verde de "Calcular" */
-.btn.sucesso { background: var(--tinta); border-color: var(--tinta); color: #fff; }
-.btn.sucesso:hover { background: #000; }
-.btn.perigo { color: var(--carimbo); border-color: #e3c1bd; }
+.btn.sucesso { background: var(--tinta); border-color: var(--tinta); color: var(--papel); }
+.btn.sucesso:hover { background: var(--tinta-forte); color: var(--papel); }
+.btn.perigo { color: var(--carimbo); border-color: var(--carimbo-borda); }
 .btn.perigo:hover { background: var(--carimbo-claro); }
 .btn.pequeno { min-height: 34px; padding: 0 12px; font-size: .88rem; }
 .btn.largo { width: 100%; }
@@ -192,7 +262,7 @@ td.principal { min-width: 150px; }
   font: inherit; font-size: 1rem; color: var(--tinta); background: var(--superficie); min-width: 0;
 }
 .campo input:focus, .campo select:focus, .input-dias:focus {
-  outline: none; border-color: var(--verde); box-shadow: 0 0 0 3px rgba(30, 90, 67, .18);
+  outline: none; border-color: var(--verde); box-shadow: 0 0 0 3px var(--foco);
 }
 .campo input:disabled, .campo select:disabled { background: var(--papel); color: var(--suave); }
 .dica { color: var(--suave); font-size: .88rem; margin: 6px 0; max-width: 72ch; }
@@ -226,13 +296,13 @@ td.principal { min-width: 150px; }
 /* ---------- Selos de situação ---------- */
 .badge {
   display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .8rem; font-weight: 600;
-  background: #edf0ea; color: var(--suave); white-space: nowrap;
+  background: var(--neutro-claro); color: var(--suave); white-space: nowrap;
 }
 .badge.verde { background: var(--verde-claro); color: var(--verde-escuro); }
 .badge.vermelho { background: var(--carimbo-claro); color: var(--carimbo); }
 .badge.amarelo { background: var(--ambar-claro); color: var(--ambar); }
-.badge.azul { background: #e6ecf2; color: #2f4a63; }
-.badge.neutro { background: #edf0ea; color: var(--suave); }
+.badge.azul { background: var(--azul-claro); color: var(--azul); }
+.badge.neutro { background: var(--neutro-claro); color: var(--suave); }
 
 /* Folha fechada: o carimbo do recibo. É o único ornamento da interface. */
 .carimbo {
@@ -265,7 +335,7 @@ table { width: 100%; border-collapse: collapse; font-size: .95rem; }
 th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--linha); vertical-align: middle; }
 th { font-weight: 600; color: var(--suave); font-size: .86rem; border-bottom-color: var(--linha-forte); white-space: nowrap; }
 tbody tr:last-child td { border-bottom: 0; }
-tbody tr:hover { background: #fafbf8; }
+tbody tr:hover { background: var(--realce-linha); }
 tfoot td { font-weight: 650; border-top: 1px solid var(--linha-forte); border-bottom: 0; background: var(--papel); }
 tfoot tr.destaque td { background: var(--verde-claro); font-size: 1.08rem; }
 .num { text-align: right; white-space: nowrap; }
@@ -364,9 +434,58 @@ tfoot tr.destaque td { background: var(--verde-claro); font-size: 1.08rem; }
 .cartao-ferias.selecionado { border-color: var(--verde); box-shadow: 0 0 0 1px var(--verde); }
 .cartao-ferias .saldo { font-size: 2rem; font-weight: 800; font-stretch: 75%; line-height: 1; }
 .cartao-ferias .saldo small { font-size: .9rem; font-weight: 500; font-stretch: 100%; }
-.barra { width: 100%; height: 6px; background: #e9ece5; border-radius: 3px; overflow: hidden; }
+.barra { width: 100%; height: 6px; background: var(--neutro-claro); border-radius: 3px; overflow: hidden; }
 .barra div { height: 100%; background: var(--verde); }
 .gozo { display: flex; align-items: center; gap: 4px; font-size: .9rem; }
+
+/* ---------- Aparência (claro / escuro / sistema) ---------- */
+.seletor-tema {
+  display: inline-flex; padding: 2px; margin-bottom: 12px;
+  border: 1px solid var(--linha-forte); border-radius: var(--raio); background: var(--papel);
+}
+.seletor-tema button {
+  border: 0; background: none; padding: 5px 10px; border-radius: 4px;
+  font: inherit; font-size: .82rem; font-weight: 550; color: var(--suave); cursor: pointer;
+}
+.seletor-tema button:hover { color: var(--tinta); }
+.seletor-tema button.ativo { background: var(--superficie); color: var(--tinta); box-shadow: 0 0 0 1px var(--linha-forte); }
+.tema-mais { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 4px 2px; border-bottom: 1px solid var(--linha); }
+.tema-mais .seletor-tema { margin: 0 0 12px; }
+
+/* ---------- Datas de pagamento (cadastro do trabalhador) ---------- */
+.grade-form.pagamentos { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.regra-pagamento { display: flex; gap: 8px; }
+.regra-pagamento input { width: 76px; flex: none; }
+.regra-pagamento select { flex: 1; }
+
+/* ---------- Tabela do INSS ---------- */
+.faixas-edicao { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.faixa-linha { display: grid; grid-template-columns: 32px minmax(0, 1fr) minmax(0, 140px) auto; gap: 12px; align-items: end; }
+.faixa-num { font-weight: 700; color: var(--suave); padding-bottom: 10px; }
+@media (max-width: 760px) {
+  .faixa-linha { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr); }
+  .faixa-linha .btn { grid-column: 2 / -1; justify-self: start; }
+}
+.simulacao-total { margin: 0 0 8px; font-size: 1.15rem; }
+.titulo-pagina.compacto { margin-bottom: 14px; align-items: flex-start; }
+.titulo-pagina.compacto h3 { margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ---------- Avisos de pagamento ---------- */
+.proximos { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--linha-forte); }
+.proximos li {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 4px 16px;
+  padding: 12px 4px; border-bottom: 1px solid var(--linha);
+}
+.proximos .data { display: flex; flex-direction: column; line-height: 1.2; }
+.proximos .data strong { font-size: 1.15rem; font-stretch: 87.5%; }
+.proximos li > span:nth-child(2) { display: flex; flex-direction: column; }
+.proximos a { font-weight: 650; color: var(--tinta); text-decoration: none; }
+.proximos a:hover { color: var(--verde); }
+.link-assinatura code {
+  display: block; padding: 10px 12px; margin-bottom: 10px; overflow-wrap: anywhere;
+  background: var(--papel); border: 1px solid var(--linha); border-radius: var(--raio); font-size: .85rem;
+}
+.espaco-acima { margin-top: 14px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

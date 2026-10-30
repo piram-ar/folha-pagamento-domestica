@@ -111,6 +111,13 @@ class Trabalhador(Base):
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     # Dias da semana trabalhados (ISO: 1 = segunda ... 7 = domingo), base dos dias úteis do VT
     dias_semana_trabalho: Mapped[str] = mapped_column(String(7), default="12345", server_default="12345")
+    # Datas de pagamento: "dia_util" = N-ésimo dia útil do mês; senão, dia N do mês (antecipado se cair em
+    # domingo/feriado). Usadas nos avisos por e-mail e no calendário (.ics/.vcs).
+    dia_pagamento_salario: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
+    salario_dia_util: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    adiantamento_acordado: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    dia_pagamento_adiantamento: Mapped[Optional[int]] = mapped_column(Integer)
+    adiantamento_dia_util: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     beneficios: Mapped[list["BeneficioFixo"]] = relationship(
         back_populates="trabalhador", cascade="all, delete-orphan"
@@ -224,3 +231,79 @@ class FolhaPagamento(Base):
     fechado_em: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     trabalhador: Mapped[Trabalhador] = relationship(back_populates="folhas")
+
+
+class TabelaInss(Base):
+    """Tabela progressiva do INSS do empregado, válida a partir de `vigencia_inicio`.
+
+    A folha de cada mês usa a tabela de vigência mais recente que já valia no 1º dia do mês.
+    """
+
+    __tablename__ = "tabelas_inss"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vigencia_inicio: Mapped[date] = mapped_column(Date, unique=True)
+    descricao: Mapped[Optional[str]] = mapped_column(String(120))
+
+    faixas: Mapped[list["FaixaInss"]] = relationship(
+        back_populates="tabela", cascade="all, delete-orphan", order_by="FaixaInss.teto"
+    )
+
+
+class FaixaInss(Base):
+    __tablename__ = "faixas_inss"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tabela_id: Mapped[int] = mapped_column(ForeignKey("tabelas_inss.id", ondelete="CASCADE"), index=True)
+    teto: Mapped[Decimal] = mapped_column(Dinheiro)  # limite superior da faixa (salário de contribuição)
+    aliquota: Mapped[Decimal] = mapped_column(Numeric(5, 2))  # em %, ex.: 7.50
+
+    tabela: Mapped[TabelaInss] = relationship(back_populates="faixas")
+
+
+class SegurancaSmtp(str, enum.Enum):
+    starttls = "starttls"  # porta 587 (Gmail, Outlook)
+    ssl = "ssl"            # porta 465
+    nenhuma = "nenhuma"
+
+
+class ConfigNotificacoes(Base):
+    """Configuração única (id = 1) dos avisos de pagamento."""
+
+    __tablename__ = "config_notificacoes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Dias de antecedência dos avisos, separados por vírgula (ex.: "3,1"); 0 = no próprio dia
+    antecedencias: Mapped[str] = mapped_column(String(40), default="3,1")
+    email_ativo: Mapped[bool] = mapped_column(Boolean, default=False)
+    destinatarios: Mapped[Optional[str]] = mapped_column(String(500))
+    hora_envio: Mapped[int] = mapped_column(Integer, default=8)
+    smtp_host: Mapped[Optional[str]] = mapped_column(String(160))
+    smtp_porta: Mapped[int] = mapped_column(Integer, default=587)
+    smtp_seguranca: Mapped[SegurancaSmtp] = mapped_column(_enum(SegurancaSmtp), default=SegurancaSmtp.starttls)
+    smtp_usuario: Mapped[Optional[str]] = mapped_column(String(160))
+    smtp_senha: Mapped[Optional[str]] = mapped_column(String(255))
+    smtp_remetente: Mapped[Optional[str]] = mapped_column(String(160))
+    # Token do link de assinatura do calendário (sem login); trocar o token invalida o link antigo
+    token_calendario: Mapped[Optional[str]] = mapped_column(String(64))
+    ultimo_envio_em: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    ultimo_erro: Mapped[Optional[str]] = mapped_column(Text)
+
+
+class TipoPagamento(str, enum.Enum):
+    salario = "salario"
+    adiantamento = "adiantamento"
+
+
+class NotificacaoEnviada(Base):
+    """Evita reenviar o mesmo aviso (inclusive após reiniciar o Pi)."""
+
+    __tablename__ = "notificacoes_enviadas"
+    __table_args__ = (UniqueConstraint("trabalhador_id", "tipo", "data_pagamento", "antecedencia"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trabalhador_id: Mapped[int] = mapped_column(ForeignKey("trabalhadores.id", ondelete="CASCADE"), index=True)
+    tipo: Mapped[TipoPagamento] = mapped_column(_enum(TipoPagamento))
+    data_pagamento: Mapped[date] = mapped_column(Date)
+    antecedencia: Mapped[int] = mapped_column(Integer)
+    enviado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())

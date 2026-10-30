@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f6f2" />
     <title>Folha Doméstica</title>
+    <script>
+      // Aplica o tema salvo antes do primeiro desenho da tela (evita piscar claro no modo escuro)
+      try {
+        var tema = localStorage.getItem('folha_tema');
+        if (tema === 'escuro') document.documentElement.dataset.theme = 'dark';
+        else if (tema === 'claro') document.documentElement.dataset.theme = 'light';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
