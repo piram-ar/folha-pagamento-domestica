@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { MODO_APP } from '../plataforma';
 import { Alerta, SituacaoFolha } from '../components/ui';
 import { brl, mesAtual, mesLongo, ROTULOS } from '../utils';
 
 /** O próximo passo do mês, na ordem da rotina: cadastrar → calcular → fechar. */
 function proximoPasso(trabalhadores, porTrabalhador, mes) {
   const nomeMes = mesLongo(mes).split(' ')[0].toLowerCase();
-  if (!trabalhadores.length) return { to: '/trabalhadores', texto: 'Cadastrar trabalhador' };
+  if (!trabalhadores.length) return MODO_APP ? null : { to: '/trabalhadores', texto: 'Cadastrar trabalhador' };
   if (trabalhadores.some((t) => !porTrabalhador[t.id])) return { to: '/folha', texto: `Calcular folha de ${nomeMes}` };
   if (trabalhadores.some((t) => porTrabalhador[t.id].status !== 'fechada')) return { to: '/folha', texto: 'Revisar e fechar folhas' };
   return null;
@@ -53,7 +54,7 @@ export default function Dashboard() {
         <div>
           <h2>{mesLongo(mes)}</h2>
           {trabalhadores.length === 0 ? (
-            <p>Cadastre quem trabalha na casa para começar a folha do mês.</p>
+            <p>Cadastre quem trabalha na casa{MODO_APP ? ' (pelo navegador)' : ''} para começar a folha do mês.</p>
           ) : (
             <p>
               {fechadas === trabalhadores.length
@@ -77,7 +78,7 @@ export default function Dashboard() {
               return (
                 <li key={t.id}>
                   <div>
-                    <Link className="nome" to={`/trabalhadores/${t.id}`}>{t.nome}</Link>
+                    {MODO_APP ? <span className="nome">{t.nome}</span> : <Link className="nome" to={`/trabalhadores/${t.id}`}>{t.nome}</Link>}
                     <small>{ROTULOS.tipo_contrato[t.tipo_contrato]}</small>
                   </div>
                   <div className="lancamentos">

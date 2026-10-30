@@ -44,7 +44,7 @@ folha-domestica/
 ```bash
 # no Windows (Git Bash), dentro da pasta do projeto
 tar -cf - --exclude=node_modules --exclude=data-local --exclude=.env --exclude=dist \
-  --exclude=__pycache__ --exclude=backups --exclude='data/*' . \
+  --exclude=__pycache__ --exclude=backups --exclude='data/*' --exclude=.venv --exclude=.git --exclude=android . \
   | ssh root@<ip-do-raspberry> 'mkdir -p /mnt/dietpi_userdata/folha-domestica && tar -xf - -C /mnt/dietpi_userdata/folha-domestica --no-same-owner'
 
 # no Pi
@@ -168,6 +168,25 @@ cair em domingo ou feriado é antecipado. A tela **Avisos de pagamento** oferece
 - **E-mail:** o Pi verifica a cada 10 minutos e envia um único e-mail com os avisos do dia a partir do horário
   escolhido. Se estiver desligado na hora, envia quando voltar, sem repetir avisos. Gmail/Outlook exigem uma
   *senha de app*. A senha SMTP fica no banco do Pi e nunca é devolvida para a tela.
+
+## App Android
+
+O app **Folha Doméstica** (Capacitor, mesma interface React em modo `app`) cobre a rotina do mês no
+celular: início, lançamentos, folha (calcular, fechar e **compartilhar o holerite/recibo pelo WhatsApp,
+e-mail etc.**), férias e **avisos de pagamento como notificação**. Cadastros e configurações continuam no
+navegador.
+
+- **Instalar:** baixe `https://github.com/piram-ar/folha-pagamento-domestica/releases/latest/download/folha-domestica.apk`
+  no celular, abra e permita a instalação. Na primeira abertura, informe o endereço do Pi (ex.: `http://192.168.5.7`).
+- **Rede:** o app conversa com o Pi pela rede de casa (HTTP). O backend libera CORS só para a origem do app.
+- **Avisos no celular:** em **Mais > Avisos neste celular**. O app busca no Pi os pagamentos dos próximos
+  120 dias e agenda notificações locais (mesma antecedência e horário do e-mail). Elas tocam com o app fechado
+  e fora de casa; a agenda se refaz sempre que o app é aberto no Wi-Fi de casa.
+- **Build:** o GitHub Actions (`.github/workflows/app-android.yml`) gera o APK a cada mudança em `frontend/`
+  e publica uma release. A assinatura usa uma chave fixa guardada nos segredos do repositório; para criá-la,
+  rode uma vez `bash scripts/configurar-assinatura-android.sh` (a cópia local fica em `~/.android-chaves`).
+  Sem a chave, o workflow gera só um APK de teste (artefato), sem release.
+- **Desenvolvimento:** `npm run build:app` gera o modo app e sincroniza o projeto `frontend/android`.
 
 ## Aparência
 

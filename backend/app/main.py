@@ -6,6 +6,7 @@ from pathlib import Path
 
 from anyio import to_thread
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import func, select
 
@@ -91,6 +92,16 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Folha Doméstica", version="1.0.0", lifespan=lifespan,
     docs_url="/api/docs", openapi_url="/api/openapi.json",
+)
+
+# O app Android carrega a interface de http://localhost (WebView do Capacitor) e chama a API do Pi.
+# Só essas origens: o site normal é servido pelo próprio Pi (mesma origem) e não precisa de CORS.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost", "https://localhost", "capacitor://localhost"],
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["Content-Disposition"],
 )
 
 for modulo in (auth, usuarios, contratante, trabalhadores, eventos, folha, ferias, inss, notificacoes):

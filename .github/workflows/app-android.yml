@@ -1,0 +1,88 @@
+# Gera o APK do app Android a cada mudança no frontend e publica em "Releases".
+# Link fixo para a versão mais nova:
+#   https://github.com/piram-ar/folha-pagamento-domestica/releases/latest/download/folha-domestica.apk
+name: App Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/app-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write  # criar a release com o APK
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4  # Capacitor 8 / Gradle exigem JDK 21
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Build do frontend (modo app) e sincronização com o Android
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build:app
+
+      - name: Chave de assinatura
+        id: chave
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::Segredos de assinatura ausentes: gerando APK de teste (debug), que não atualiza por cima de outra versão. Rode scripts/configurar-assinatura-android.sh."
+            echo "assinado=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/folha.p12"
+            echo "assinado=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Gerar APK
+        working-directory: frontend/android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.${{ github.run_number }}
+          KEYSTORE_PATH: ${{ steps.chave.outputs.assinado == 'true' && format('{0}/folha.p12', runner.temp) || '' }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          chmod +x gradlew
+          if [ "${{ steps.chave.outputs.assinado }}" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon
+            cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/folha-domestica.apk"
+          else
+            ./gradlew assembleDebug --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/folha-domestica.apk"
+          fi
+          rm -f "$RUNNER_TEMP/folha.p12"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: folha-domestica-apk
+          path: ${{ runner.temp }}/folha-domestica.apk
+
+      - name: Publicar release
+        if: steps.chave.outputs.assinado == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "app-v1.${{ github.run_number }}" "$RUNNER_TEMP/folha-domestica.apk" \
+            --title "App Android 1.${{ github.run_number }}" \
+            --notes "APK do app Folha Doméstica. No celular, abra o arquivo e permita a instalação. Versões novas instalam por cima da anterior." \
+            --latest

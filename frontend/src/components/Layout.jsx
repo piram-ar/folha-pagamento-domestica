@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { MODO_APP } from '../plataforma';
 import { SeletorTema } from '../tema';
 import { Modal } from './ui';
 
@@ -18,6 +19,11 @@ const CADASTROS = [
   { to: '/contratante', label: 'Empregador / contratante' },
   { to: '/inss', label: 'Tabela do INSS' },
 ];
+// No app Android, cadastros e configurações ficam no navegador; o "Mais" só tem o que é do celular
+const OPCOES_APP = [
+  { to: '/avisos-celular', label: 'Avisos neste celular' },
+  { to: '/servidor', label: 'Servidor (Raspberry Pi)' },
+];
 
 function Icone({ d }) {
   return (
@@ -31,7 +37,8 @@ export default function Layout() {
   const { usuario, isAdmin, logout } = useAuth();
   const { pathname } = useLocation();
   const [maisAberto, setMaisAberto] = useState(false);
-  const cadastros = isAdmin ? [...CADASTROS, { to: '/usuarios', label: 'Usuários do sistema' }] : CADASTROS;
+  const cadastros = MODO_APP ? OPCOES_APP
+    : isAdmin ? [...CADASTROS, { to: '/usuarios', label: 'Usuários do sistema' }] : CADASTROS;
   const emCadastro = cadastros.some((l) => pathname.startsWith(l.to));
 
   return (

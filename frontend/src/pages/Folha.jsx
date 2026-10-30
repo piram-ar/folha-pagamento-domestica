@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { abrirPdf, api, baixarArquivo } from '../api';
+import { MODO_APP } from '../plataforma';
 import { useAuth } from '../AuthContext';
 import { Alerta, Campo, Modal, SituacaoFolha, useTrabalhadores } from '../components/ui';
 import { brl, mesAtual, mesExtenso, mesLongo, ROTULOS } from '../utils';
@@ -162,7 +163,7 @@ export default function Folha() {
       {semContratante && (
         <div className="alerta erro">
           Os dados do empregador/contratante e do local do serviço ainda não foram cadastrados e não sairão no recibo.{' '}
-          <Link to="/contratante">Cadastrar agora</Link>
+          {MODO_APP ? 'Cadastre pelo navegador.' : <Link to="/contratante">Cadastrar agora</Link>}
         </div>
       )}
       <p className="dica">
@@ -207,7 +208,7 @@ export default function Folha() {
                     {f && !fechada && <button className="btn pequeno sucesso" disabled={ocupado} onClick={() => fechar(f)}>Fechar</button>}
                     {fechada && (
                       <button className="btn pequeno primario" onClick={() => pdf(f)}>
-                        {t.tipo_contrato === 'com_registro' ? 'Holerite' : 'Recibo'}
+                        {MODO_APP ? 'Enviar ' : ''}{t.tipo_contrato === 'com_registro' ? (MODO_APP ? 'holerite' : 'Holerite') : (MODO_APP ? 'recibo' : 'Recibo')}
                       </button>
                     )}
                     {f && <button className="btn pequeno" onClick={() => setDetalhe(f)}>Detalhes</button>}

@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext';
 import { Alerta, Badge, Campo } from '../components/ui';
 import { dataBR, diaSemana, ROTULOS } from '../utils';
 
+const APK_URL = 'https://github.com/piram-ar/folha-pagamento-domestica/releases/latest/download/folha-domestica.apk';
 const faltam = (d) => (d === 0 ? 'hoje' : d === 1 ? 'amanhã' : `em ${d} dias`);
 
 /** Servidores SMTP mais comuns (Gmail e Outlook exigem "senha de app"). */
@@ -123,6 +124,16 @@ export default function Avisos() {
         ) : isAdmin ? (
           <button type="button" className="btn" onClick={novoLink}>Criar link de assinatura</button>
         ) : <p className="vazio">Nenhum link criado. Peça a um administrador.</p>}
+      </section>
+
+      <section className="painel">
+        <h3>No celular (app Android)</h3>
+        <p className="dica">
+          Com o app Folha Doméstica instalado, os avisos também chegam como notificação no celular, no mesmo
+          horário e com a mesma antecedência definidos abaixo. Ative em <strong>Mais &gt; Avisos neste celular</strong>.
+          O app também permite lançar o mês, fechar a folha, registrar férias e enviar recibos pelo WhatsApp ou e-mail.
+        </p>
+        <a className="btn" href={APK_URL}>Baixar o app (APK)</a>
       </section>
 
       <form onSubmit={salvar}>

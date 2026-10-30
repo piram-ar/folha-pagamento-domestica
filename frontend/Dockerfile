@@ -1,5 +1,5 @@
 # Etapa 1: build do React
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 # Limita o heap do Node para o build caber no 1 GB de RAM do Pi 3
 ENV NODE_OPTIONS=--max-old-space-size=512

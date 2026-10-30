@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { Alerta, Campo } from '../components/ui';
+import { getServidor, MODO_APP } from '../plataforma';
 
 export default function Login() {
   const { usuario, login } = useAuth();
@@ -42,6 +43,7 @@ export default function Login() {
           </Campo>
           <button className="btn primario largo" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
         </form>
+        {MODO_APP && <p className="dica">Servidor: {getServidor()} · <Link to="/servidor">trocar</Link></p>}
       </div>
     </div>
   );
