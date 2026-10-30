@@ -233,6 +233,7 @@ class FolhaPagamento(Base):
     detalhamento: Mapped[Optional[str]] = mapped_column(Text)  # JSON com as linhas do recibo e encargos
     calculado_em: Mapped[Optional[datetime]] = mapped_column(DateTime)
     fechado_em: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    pago_em: Mapped[Optional[date]] = mapped_column(Date)  # vazio = líquido ainda em aberto
 
     trabalhador: Mapped[Trabalhador] = relationship(back_populates="folhas")
 

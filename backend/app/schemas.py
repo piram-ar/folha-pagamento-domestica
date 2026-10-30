@@ -362,6 +362,11 @@ class FolhaOut(ORM):
     detalhamento: Optional[dict] = None
     calculado_em: Optional[datetime]
     fechado_em: Optional[datetime]
+    pago_em: Optional[date]
+
+
+class PagamentoFolhaIn(BaseModel):
+    pago_em: date = Field(default_factory=date.today)
 
 
 # ---------- Férias ----------

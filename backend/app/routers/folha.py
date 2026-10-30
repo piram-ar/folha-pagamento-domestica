@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from ..database import get_db
 from ..deps import exigir_admin, usuario_atual
 from ..models import FolhaPagamento, StatusFolha, TipoContrato, Trabalhador
-from ..schemas import CalcularFolhaIn, DiasUteisOut, FolhaOut, MesAno
+from ..schemas import CalcularFolhaIn, DiasUteisOut, FolhaOut, MesAno, PagamentoFolhaIn
 from ..services.calculo_folha import gerar_ou_atualizar, vt_por_dia
 from ..services.calendario import dias_uteis
 from .contratante import obter_contratante
@@ -36,8 +36,8 @@ def _obter(db: Session, folha_id: int) -> FolhaPagamento:
 
 @router.get("", response_model=list[FolhaOut])
 def listar(mes_ano: str | None = None, trabalhador_id: int | None = None, db: Session = Depends(get_db)):
-    consulta = select(FolhaPagamento).options(joinedload(FolhaPagamento.trabalhador)).order_by(
-        FolhaPagamento.mes_ano.desc()
+    consulta = select(FolhaPagamento).join(Trabalhador).options(joinedload(FolhaPagamento.trabalhador)).order_by(
+        FolhaPagamento.mes_ano.desc(), Trabalhador.nome
     )
     if mes_ano:
         consulta = consulta.where(FolhaPagamento.mes_ano == mes_ano)
@@ -113,8 +113,30 @@ def fechar(folha_id: int, db: Session = Depends(get_db)):
 @router.post("/{folha_id}/reabrir", response_model=FolhaOut, dependencies=[Depends(exigir_admin)])
 def reabrir(folha_id: int, db: Session = Depends(get_db)):
     folha = _obter(db, folha_id)
+    if folha.pago_em:
+        raise HTTPException(status_code=409, detail="Folha já paga: desfaça o pagamento antes de reabrir")
     folha.status = StatusFolha.rascunho
     folha.fechado_em = None
+    db.commit()
+    return _saida(folha)
+
+
+@router.post("/{folha_id}/pagar", response_model=FolhaOut)
+def registrar_pagamento(folha_id: int, dados: PagamentoFolhaIn | None = None, db: Session = Depends(get_db)):
+    """Marca o líquido como pago. Folha paga não pode mais mudar, então é fechada junto."""
+    folha = _obter(db, folha_id)
+    folha.pago_em = (dados or PagamentoFolhaIn()).pago_em
+    if folha.status != StatusFolha.fechada:
+        folha.status = StatusFolha.fechada
+        folha.fechado_em = datetime.now()
+    db.commit()
+    return _saida(folha)
+
+
+@router.delete("/{folha_id}/pagamento", response_model=FolhaOut)
+def desfazer_pagamento(folha_id: int, db: Session = Depends(get_db)):
+    folha = _obter(db, folha_id)
+    folha.pago_em = None
     db.commit()
     return _saida(folha)
 

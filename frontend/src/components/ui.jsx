@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { dataBR } from '../utils';
 
 export function Modal({ titulo, onClose, children, largo = false }) {
   useEffect(() => {
@@ -44,6 +45,7 @@ export function Badge({ tipo = 'neutro', children }) {
 /** Situação da folha do mês; a fechada recebe o carimbo (animado só quando acabou de ser fechada). */
 export function SituacaoFolha({ folha, recemFechada = false }) {
   if (!folha) return <Badge>Não calculada</Badge>;
+  if (folha.pago_em) return <Badge tipo="verde">Paga em {dataBR(folha.pago_em)}</Badge>;
   if (folha.status === 'fechada') return <span className={`carimbo ${recemFechada ? 'novo' : ''}`}>Fechada</span>;
   return <Badge tipo="amarelo">Rascunho</Badge>;
 }

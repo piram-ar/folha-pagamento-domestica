@@ -129,6 +129,8 @@ cd frontend && npm install && npm run dev                                    # h
 | Férias | 30 dias a cada 12 meses desde a admissão; prazo de concessão de 12 meses após o período; alertas de vencimento |
 
 Folha **fechada** congela os valores e bloqueia lançamentos do mês; apenas admins podem reabri-la.
+Ao pagar, marque a folha como **paga** (com a data); a lista "Folhas registradas", no fim da tela da folha,
+mostra todas as competências com a situação (paga/em aberto) e o total líquido ainda em aberto.
 
 > ⚠️ **Tabela do INSS:** cadastrada na tela **Tabela do INSS**, uma por vigência (vem com a de 2025).
 > Quando o governo publicar a tabela do ano (normalmente em janeiro), cadastre uma nova vigência: cada folha
