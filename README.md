@@ -127,3 +127,7 @@ Folha **fechada** congela os valores e bloqueia lançamentos do mês; apenas adm
 > ⚠️ **Tabela do INSS:** o padrão embutido é a de 2025. Atualize `TABELA_INSS_JSON` no `.env`
 > (ou `backend/app/services/tabelas.py`) quando sair a tabela do ano. IRRF não é calculado.
 > Os valores são estimativas para controle: a guia oficial é sempre a emitida pelo eSocial.
+
+## Licença
+
+Distribuído sob a licença MIT. Veja o arquivo [LICENSE](LICENSE).
