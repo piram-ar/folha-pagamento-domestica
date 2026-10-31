@@ -24,6 +24,11 @@ export const mesAtual = () => {
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho',
   'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+export const diasDoMes = (mesAno) => {
+  const [a, m] = mesAno.split('-').map(Number);
+  return new Date(a, m, 0).getDate();
+};
+
 export const mesExtenso = (mesAno) => {
   const [a, m] = mesAno.split('-');
   return `${MESES[Number(m) - 1]}/${a}`;

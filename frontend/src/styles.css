@@ -340,8 +340,8 @@ tfoot td { font-weight: 650; border-top: 1px solid var(--linha-forte); border-bo
 tfoot tr.destaque td { background: var(--verde-claro); font-size: 1.08rem; }
 .num { text-align: right; white-space: nowrap; }
 .input-dias { width: 72px; min-height: 36px; padding: 0 8px; }
-.horas-folha { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.horas-folha small { color: var(--suave); }
+.dias-folha { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.dias-folha small { color: var(--suave); }
 .totais-linha { display: flex; gap: 8px 24px; flex-wrap: wrap; margin-bottom: 14px; font-size: .93rem; color: var(--suave); }
 .totais-linha strong { color: var(--tinta); }
 

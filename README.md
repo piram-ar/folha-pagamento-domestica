@@ -117,13 +117,13 @@ cd frontend && npm install && npm run dev                                    # h
 
 | Item | Regra |
 |---|---|
-| Salário do mês | pago pelas **horas trabalhadas**: com a jornada mensal do cadastro (padrão 200 h) é o salário cheio; com menos, `valor-hora × horas trabalhadas`. Não se lança mais horas que a jornada: o excedente é hora extra |
-| Valor-hora | `salário base ÷ jornada mensal` do trabalhador (máx. 220 h, LC 150/2015). Horas extras e atrasos são recalculados ao calcular a folha |
+| Salário do mês | mensalista: **mês completo** (todos os dias do mês, seja de 28 ou 31) paga o salário cheio, pelo mês comercial de 30 dias. Mês incompleto (admissão, desligamento, afastamento) é proporcional aos dias reais do mês: `salário ÷ dias do mês × dias trabalhados`. No mês da admissão, a tela já sugere os dias a partir dela |
+| Valor-hora | `salário base ÷ divisor de horas` do cadastro (padrão 200 h; a LC 150/2015 permite até 220). Horas extras e atrasos são recalculados ao calcular a folha |
 | Hora extra | `valor-hora × (1 + adicional) × horas`, adicional 50% ou 100% |
-| Falta | por dias (`salário ÷ 30 × dias`) ou por horas (`valor-hora × horas`) |
+| Falta | por dias (`salário ÷ dias do mês × dias`) ou por horas (`valor-hora × horas`) |
 | Vales/adiantamentos | somados no mês e descontados no fechamento |
 | Vale-transporte | cadastrado **por dia** e multiplicado pelos dias úteis do mês: dias da semana trabalhados (configurados no cadastro do trabalhador) sem os feriados nacionais. O número é sugerido na tela da folha e pode ser ajustado (feriado local, falta, folga). A cota do empregado (até 6%) continua sendo um desconto mensal fixo |
-| Benefícios fixos | cada um configurado como *soma ao salário*, *desconta do salário* (ex.: cota de 6% do VT) ou *pago à parte* (só informativo no recibo) |
+| Benefícios fixos | cada um configurado como *soma ao salário*, *desconta do salário* (ex.: cota de 6% do VT) ou *pago à parte* (só informativo no recibo), com **início da vigência**: entra nas folhas a partir do mês dessa data, o que permite gerar folhas e recibos de meses passados só com os benefícios da época |
 | **Com registro** | INSS do empregado (tabela progressiva) descontado no recibo. Encargos = estimativa da guia DAE: INSS do empregado + 8% patronal + 0,8% GILRAT + 8% FGTS + 3,2% FGTS compensatório |
 | **Sem registro** | Sem descontos legais. "Fundo de reserva" = 1/12 férias + 1/3 de férias + 1/12 13º (≈ 19,44% da remuneração) |
 | Férias | 30 dias a cada 12 meses desde a admissão; prazo de concessão de 12 meses após o período; alertas de vencimento |

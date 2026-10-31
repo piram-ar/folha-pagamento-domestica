@@ -31,8 +31,13 @@ def feriados_nacionais(ano: int) -> frozenset[date]:
     return frozenset(feriados)
 
 
-def dias_uteis(mes_ano: str, dias_semana: str = DIAS_SEMANA_PADRAO) -> int:
-    """Dias do mês em que o trabalhador trabalha, sem os feriados nacionais.
+def dias_no_mes(mes_ano: str) -> int:
+    ano, mes = map(int, mes_ano.split("-"))
+    return calendar.monthrange(ano, mes)[1]
+
+
+def dias_uteis(mes_ano: str, dias_semana: str = DIAS_SEMANA_PADRAO, a_partir_de: date | None = None) -> int:
+    """Dias do mês em que o trabalhador trabalha, sem os feriados nacionais (e antes de `a_partir_de`).
 
     Feriados estaduais/municipais e faltas não entram: ajuste o número na tela da folha.
     """
@@ -41,6 +46,8 @@ def dias_uteis(mes_ano: str, dias_semana: str = DIAS_SEMANA_PADRAO) -> int:
     total = 0
     for dia in range(1, calendar.monthrange(ano, mes)[1] + 1):
         d = date(ano, mes, dia)
+        if a_partir_de and d < a_partir_de:
+            continue
         if str(d.isoweekday()) in dias_semana and d not in feriados:
             total += 1
     return total

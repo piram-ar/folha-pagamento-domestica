@@ -7,6 +7,7 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 from ..models import Contratante, FolhaPagamento, TipoContrato
+from .calendario import dias_no_mes
 from .esocial import rubrica_do_item
 
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
@@ -76,12 +77,10 @@ def brl(valor) -> str:
     return texto.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def horas(valor) -> str:
-    """Horas sem zeros à direita (ex.: 176.50 -> '176,5 h')."""
-    texto = f"{Decimal(valor):f}"
-    if "." in texto:
-        texto = texto.rstrip("0").rstrip(".")
-    return texto.replace(".", ",") + " h"
+def dias_da_folha(folha: FolhaPagamento) -> str:
+    """'' no mês completo; ' (19 de 31 dias)' no mês incompleto."""
+    total = dias_no_mes(folha.mes_ano)
+    return "" if folha.dias_trabalhados >= total else f" ({folha.dias_trabalhados} de {total} dias)"
 
 
 def formatar_cpf(cpf: str) -> str:
@@ -318,8 +317,8 @@ def _recibo_servico(pdf: FPDF, folha: FolhaPagamento, detalhe: dict, contratante
         largura, 6,
         f"Eu, {t.nome}, inscrito(a) no CPF sob o nº {formatar_cpf(t.cpf)}, declaro que recebi de {pagador}, "
         f"a importância de R$ {brl(folha.salario_liquido)} ({valor_por_extenso(folha.salario_liquido)}), "
-        f"referente ao pagamento de serviços domésticos prestados em {competencia_extenso(folha.mes_ano)} "
-        f"({horas(folha.horas_trabalhadas)} de {horas(folha.horas_mensais)})" + (f", no endereço {local}" if local else "") + ".",
+        f"referente ao pagamento de serviços domésticos prestados em {competencia_extenso(folha.mes_ano)}"
+        + dias_da_folha(folha) + (f", no endereço {local}" if local else "") + ".",
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
 

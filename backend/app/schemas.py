@@ -19,7 +19,7 @@ from .models import (
 
 MesAno = Annotated[str, StringConstraints(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
 Valor = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
-# LC 150/2015: no máximo 44 h semanais, ou 220 h no mês
+# Divisor do valor-hora das horas extras (LC 150/2015 permite até 220)
 HorasMensais = Annotated[Decimal, Field(gt=0, le=220, max_digits=6, decimal_places=2)]
 
 
@@ -176,6 +176,7 @@ class BeneficioIn(BaseModel):
     natureza: NaturezaBeneficio = NaturezaBeneficio.provento
     descricao: Optional[str] = Field(default=None, max_length=120)
     valor: Valor
+    vigencia_inicio: date
 
 
 class BeneficioOut(ORM):
@@ -185,6 +186,7 @@ class BeneficioOut(ORM):
     natureza: NaturezaBeneficio
     descricao: Optional[str]
     valor: Decimal
+    vigencia_inicio: date
 
 
 class TrabalhadorOut(ORM):
@@ -330,8 +332,8 @@ class EventoOut(ORM):
 class CalcularFolhaIn(BaseModel):
     trabalhador_id: int
     mes_ano: MesAno
-    # Horas trabalhadas no mês, até a jornada do trabalhador; o que passar disso é hora extra
-    horas_trabalhadas: Annotated[Decimal, Field(ge=0, le=220, max_digits=6, decimal_places=2)]
+    # Dias trabalhados; igual aos dias do mês (28 a 31) = mês completo, salário cheio
+    dias_trabalhados: int = Field(ge=0, le=31)
     # Dias úteis para o vale-transporte; se omitido, calcula pelo calendário do trabalhador
     dias_uteis: Optional[int] = Field(default=None, ge=0, le=31)
 
@@ -340,6 +342,8 @@ class DiasUteisOut(BaseModel):
     trabalhador_id: int
     dias_uteis: int
     tem_vt_diario: bool
+    dias_no_mes: int
+    dias_sugeridos: int  # mês completo, ou a partir da admissão no mês dela
 
 
 class FolhaOut(ORM):
@@ -348,7 +352,7 @@ class FolhaOut(ORM):
     trabalhador_nome: str
     tipo_contrato: TipoContrato
     mes_ano: str
-    horas_trabalhadas: Decimal
+    dias_trabalhados: int
     horas_mensais: Decimal
     dias_uteis: Optional[int]
     salario_base: Decimal

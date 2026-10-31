@@ -18,6 +18,7 @@ from ..models import (
     Trabalhador,
 )
 from . import tabelas
+from .calendario import dias_no_mes
 from .calendario import dias_uteis as calcular_dias_uteis
 from .esocial import rubrica_beneficio
 from .inss import faixas_do_mes, inss_progressivo
@@ -61,6 +62,16 @@ def valor_horas_falta(salario_base: Decimal, horas_mensais: Decimal, horas: Deci
     return q(valor_hora(salario_base, horas_mensais) * Decimal(horas))
 
 
+def valor_dias(salario_base: Decimal, mes_ano: str, dias: int) -> Decimal:
+    """Mês incompleto (admissão, desligamento, afastamento, faltas): proporcional aos dias reais do mês."""
+    return q(Decimal(salario_base) / dias_no_mes(mes_ano) * dias)
+
+
+def beneficio_vigente(beneficio, mes_ano: str) -> bool:
+    """O benefício entra a partir da competência em que começou a valer."""
+    return beneficio.vigencia_inicio.strftime("%Y-%m") <= mes_ano
+
+
 def vt_por_dia(beneficio) -> bool:
     """Vale-transporte pago (no salário ou à parte) é cadastrado por dia e multiplicado pelos dias úteis.
 
@@ -69,28 +80,24 @@ def vt_por_dia(beneficio) -> bool:
     return beneficio.tipo == TipoBeneficio.vale_transporte and beneficio.natureza != NaturezaBeneficio.desconto
 
 
-def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, horas_trabalhadas: Decimal,
+def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhados: int,
              dias_uteis: int | None = None) -> dict:
     """Calcula os valores da folha do mês. Não faz commit, mas corrige na sessão o valor das horas
-    extras e dos atrasos lançados para a jornada e o salário atuais.
+    extras e dos atrasos lançados para o divisor de horas e o salário atuais.
 
-    O salário é pago pelas horas trabalhadas, até a jornada mensal do cadastro (salário cheio); horas
-    além da jornada só entram como horas extras. O vale-transporte segue os dias úteis.
+    Mensalista: mês completo (todos os dias do mês, seja de 28 ou 31) paga o salário cheio, pelo mês
+    comercial; mês incompleto paga proporcional aos dias reais do mês. As horas extras usam o valor-hora
+    pelo divisor do cadastro (ex.: 200 h). O vale-transporte segue os dias úteis.
     """
+    total_dias = dias_no_mes(mes_ano)
+    if dias_trabalhados > total_dias:
+        raise ValueError(f"{mes_ano[5:]}/{mes_ano[:4]} tem {total_dias} dias.")
     horas_mensais = Decimal(trabalhador.horas_mensais)
-    horas_trabalhadas = Decimal(horas_trabalhadas)
-    if horas_trabalhadas > horas_mensais:
-        raise ValueError(
-            f"{_fmt(horas_trabalhadas)} h passa da jornada de {_fmt(horas_mensais)} h de {trabalhador.nome}. "
-            "Lance o excedente como horas extras."
-        )
     if dias_uteis is None:
         dias_uteis = calcular_dias_uteis(mes_ano, trabalhador.dias_semana_trabalho)
     salario_base = salario_do_mes(trabalhador, mes_ano)  # considera reajustes vigentes no mês
-    if horas_trabalhadas == horas_mensais:
-        salario_proporcional = q(salario_base)
-    else:
-        salario_proporcional = q(valor_hora(salario_base, horas_mensais) * horas_trabalhadas)
+    completo = dias_trabalhados == total_dias
+    salario_proporcional = q(salario_base) if completo else valor_dias(salario_base, mes_ano, dias_trabalhados)
 
     eventos = db.scalars(
         select(EventoFolha)
@@ -108,8 +115,8 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, horas_trabalha
             })
 
     clt = trabalhador.tipo_contrato == TipoContrato.com_registro
-    item("001", "Salário" if clt else "Serviços prestados", f"{_fmt(horas_trabalhadas)} h", "provento",
-         salario_proporcional, "1000")
+    referencia = "30 dias" if completo else f"{dias_trabalhados}/{total_dias} dias"
+    item("001", "Salário" if clt else "Serviços prestados", referencia, "provento", salario_proporcional, "1000")
 
     # Horas extras agrupadas por percentual
     he_por_pct: dict[Decimal, list[Decimal]] = defaultdict(lambda: [ZERO, ZERO])
@@ -149,6 +156,8 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, horas_trabalha
     total_benef_prov = total_benef_desc = ZERO
     informativos = []
     for b in trabalhador.beneficios:
+        if not beneficio_vigente(b, mes_ano):
+            continue
         rotulo = b.descricao or ROTULO_BENEFICIO[b.tipo]
         valor, referencia = Decimal(b.valor), ""
         if vt_por_dia(b):
@@ -231,7 +240,7 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, horas_trabalha
     }
 
 
-def gerar_ou_atualizar(db: Session, trabalhador: Trabalhador, mes_ano: str, horas_trabalhadas: Decimal,
+def gerar_ou_atualizar(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhados: int,
                        dias_uteis: int | None = None) -> FolhaPagamento:
     folha = db.scalar(
         select(FolhaPagamento).where(
@@ -241,12 +250,12 @@ def gerar_ou_atualizar(db: Session, trabalhador: Trabalhador, mes_ano: str, hora
     if folha and folha.status == StatusFolha.fechada:
         raise ValueError("A folha deste mês já está fechada. Reabra-a para recalcular.")
 
-    resultado = calcular(db, trabalhador, mes_ano, horas_trabalhadas, dias_uteis)
+    resultado = calcular(db, trabalhador, mes_ano, dias_trabalhados, dias_uteis)
     detalhamento = resultado.pop("detalhamento")
     if folha is None:
         folha = FolhaPagamento(trabalhador_id=trabalhador.id, mes_ano=mes_ano, status=StatusFolha.rascunho)
         db.add(folha)
-    folha.horas_trabalhadas = horas_trabalhadas
+    folha.dias_trabalhados = dias_trabalhados
     for campo, valor in resultado.items():
         setattr(folha, campo, valor)
     folha.detalhamento = json.dumps(detalhamento, ensure_ascii=False)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { Alerta, Badge, Campo, useTrabalhadores } from '../components/ui';
-import { brl, dataBR, hoje, mesAtual, mesLongo, ROTULOS } from '../utils';
+import { brl, dataBR, diasDoMes, hoje, mesAtual, mesLongo, ROTULOS } from '../utils';
 
 const ABAS = [
   { tipo: 'vale_antecipacao', label: 'Vale / adiantamento' },
@@ -40,9 +40,9 @@ export default function Lancamentos() {
   const previa = useMemo(() => {
     const horas = Number(String(form.horas).replace(',', '.')) || 0;
     if (tipo === 'hora_extra') return valorHora * (1 + Number(form.percentual) / 100) * horas;
-    if (tipo === 'falta') return form.faltaPor === 'dias' ? (salario / 30) * (Number(form.dias) || 0) : valorHora * horas;
+    if (tipo === 'falta') return form.faltaPor === 'dias' ? (salario / diasDoMes(mes)) * (Number(form.dias) || 0) : valorHora * horas;
     return null;
-  }, [tipo, form, salario, valorHora]);
+  }, [tipo, form, salario, valorHora, mes]);
 
   const enviar = async (e) => {
     e.preventDefault();

@@ -9,7 +9,7 @@ from ..database import get_db
 from ..deps import usuario_atual
 from ..models import EventoFolha, FolhaPagamento, StatusFolha, TipoEvento
 from ..schemas import EventoIn, EventoOut
-from ..services.calculo_folha import q, valor_hora_extra, valor_horas_falta
+from ..services.calculo_folha import valor_dias, valor_hora_extra, valor_horas_falta
 from ..services.salario import salario_do_mes
 from .trabalhadores import obter_trabalhador
 
@@ -54,7 +54,7 @@ def criar(dados: EventoIn, db: Session = Depends(get_db)):
             valor = valor_hora_extra(salario_do_mes(trabalhador, dados.mes_ano), trabalhador.horas_mensais,
                                      dados.quantidade_horas, percentual)
     elif dados.tipo == TipoEvento.falta and valor is None and dados.quantidade_dias:
-        valor = q(salario_do_mes(trabalhador, dados.mes_ano) / 30 * dados.quantidade_dias)
+        valor = valor_dias(salario_do_mes(trabalhador, dados.mes_ano), dados.mes_ano, dados.quantidade_dias)
         descricao = descricao or f"{dados.quantidade_dias} dia(s) de falta"
     elif dados.tipo == TipoEvento.falta and valor is None:
         if not dados.quantidade_horas:

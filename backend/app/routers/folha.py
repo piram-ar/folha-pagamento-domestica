@@ -9,8 +9,9 @@ from ..database import get_db
 from ..deps import exigir_admin, usuario_atual
 from ..models import FolhaPagamento, StatusFolha, TipoContrato, Trabalhador
 from ..schemas import CalcularFolhaIn, DiasUteisOut, FolhaOut, MesAno, PagamentoFolhaIn
-from ..services.calculo_folha import gerar_ou_atualizar, vt_por_dia
-from ..services.calendario import dias_uteis
+from ..services.calculo_folha import beneficio_vigente, gerar_ou_atualizar, vt_por_dia
+from ..services.calendario import dias_no_mes, dias_uteis
+from ..services.salario import inicio_do_mes
 from .contratante import obter_contratante
 from .trabalhadores import obter_trabalhador
 
@@ -51,7 +52,7 @@ def calcular(dados: CalcularFolhaIn, db: Session = Depends(get_db)):
     """Calcula (ou recalcula) a folha do mês e grava como rascunho."""
     trabalhador = obter_trabalhador(db, dados.trabalhador_id)
     try:
-        folha = gerar_ou_atualizar(db, trabalhador, dados.mes_ano, dados.horas_trabalhadas, dados.dias_uteis)
+        folha = gerar_ou_atualizar(db, trabalhador, dados.mes_ano, dados.dias_trabalhados, dados.dias_uteis)
     except ValueError as erro:
         raise HTTPException(status_code=409, detail=str(erro))
     return _saida(folha)
@@ -59,16 +60,22 @@ def calcular(dados: CalcularFolhaIn, db: Session = Depends(get_db)):
 
 @router.get("/dias-uteis", response_model=list[DiasUteisOut])
 def sugerir_dias_uteis(mes_ano: MesAno, db: Session = Depends(get_db)):
-    """Dias úteis sugeridos no mês para cada trabalhador (dias da semana dele, sem feriados nacionais)."""
+    """Sugestões do mês para cada trabalhador: dias trabalhados (mês completo, ou a partir da admissão
+    no mês dela) e dias úteis do vale-transporte (dias da semana dele, sem feriados nacionais)."""
     trabalhadores = db.scalars(select(Trabalhador).options(selectinload(Trabalhador.beneficios))).all()
-    return [
-        DiasUteisOut(
+    total = dias_no_mes(mes_ano)
+    sugestoes = []
+    for t in trabalhadores:
+        admitido_no_mes = t.data_admissao.strftime("%Y-%m") == mes_ano
+        inicio = t.data_admissao if admitido_no_mes else inicio_do_mes(mes_ano)
+        sugestoes.append(DiasUteisOut(
             trabalhador_id=t.id,
-            dias_uteis=dias_uteis(mes_ano, t.dias_semana_trabalho),
-            tem_vt_diario=any(vt_por_dia(b) for b in t.beneficios),
-        )
-        for t in trabalhadores
-    ]
+            dias_uteis=dias_uteis(mes_ano, t.dias_semana_trabalho, inicio),
+            tem_vt_diario=any(vt_por_dia(b) and beneficio_vigente(b, mes_ano) for b in t.beneficios),
+            dias_no_mes=total,
+            dias_sugeridos=total - inicio.day + 1,
+        ))
+    return sugestoes
 
 
 @router.get("/esocial.{formato}")

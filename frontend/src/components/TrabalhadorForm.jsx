@@ -88,8 +88,8 @@ export default function TrabalhadorForm({ inicial, onSalvar, onCancelar, textoBo
             <input value={form.funcao || ''} onChange={set('funcao')} placeholder="Empregado(a) doméstico(a)" maxLength={120} />
           </Campo>
         )}
-        <Campo label="Jornada mensal (horas)"
-          dica="Horas do salário cheio e divisor do valor-hora. Mês com menos horas paga proporcional; acima disso, só como hora extra.">
+        <Campo label="Divisor de horas do mês"
+          dica="Base do valor-hora das horas extras e atrasos (salário ÷ divisor). Padrão 200 h.">
           <input type="number" min="1" max="220" step="0.5" value={form.horas_mensais} onChange={set('horas_mensais')} required />
         </Campo>
         <Campo label={form.tipo_contrato === 'com_registro' ? 'Data de admissão' : 'Data de início'}>

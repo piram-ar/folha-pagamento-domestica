@@ -4,7 +4,7 @@ import { abrirPdf, api, baixarArquivo } from '../api';
 import { MODO_APP } from '../plataforma';
 import { useAuth } from '../AuthContext';
 import { Alerta, Badge, Campo, Modal, SituacaoFolha, useTrabalhadores } from '../components/ui';
-import { brl, hoje, mesAtual, mesExtenso, mesLongo, ROTULOS } from '../utils';
+import { brl, diasDoMes, hoje, mesAtual, mesExtenso, mesLongo, ROTULOS } from '../utils';
 
 function DetalheFolha({ folha, onClose, onPdf, onExcluir, onReabrir, onPagar, onDesfazerPagamento }) {
   const d = folha.detalhamento || { itens: [], encargos: { itens: {} } };
@@ -150,7 +150,7 @@ export default function Folha() {
   const [folhas, setFolhas] = useState([]);
   const [todas, setTodas] = useState([]);
   const [pagando, setPagando] = useState(null);
-  const [horas, setHoras] = useState({});
+  const [dias, setDias] = useState({});
   const [uteis, setUteis] = useState({});
   const [sugestao, setSugestao] = useState({});
   const [detalhe, setDetalhe] = useState(null);
@@ -172,7 +172,7 @@ export default function Folha() {
       ]);
       setFolhas(lista);
       setTodas(historico);
-      setHoras(Object.fromEntries(lista.map((f) => [f.trabalhador_id, Number(f.horas_trabalhadas)])));
+      setDias(Object.fromEntries(lista.map((f) => [f.trabalhador_id, f.dias_trabalhados])));
       const porId = Object.fromEntries(sugeridos.map((s) => [s.trabalhador_id, s]));
       setSugestao(porId);
       // Folha já calculada mantém os dias úteis usados; senão, sugere pelo calendário do trabalhador
@@ -187,10 +187,11 @@ export default function Folha() {
   const linhas = [
     ...trabalhadores,
     ...folhas.filter((f) => !trabalhadores.some((t) => t.id === f.trabalhador_id))
-      .map((f) => ({ id: f.trabalhador_id, nome: f.trabalhador_nome, tipo_contrato: f.tipo_contrato, horas_mensais: f.horas_mensais })),
+      .map((f) => ({ id: f.trabalhador_id, nome: f.trabalhador_nome, tipo_contrato: f.tipo_contrato })),
   ];
-  // Jornada do cadastro: salário cheio; sem folha calculada, o mês começa completo
-  const jornada = (t) => Number(t.horas_mensais);
+  const diasNoMes = diasDoMes(mes);
+  // Sem folha calculada: mês completo, ou a partir da admissão no mês dela
+  const diasPadrao = (t) => sugestao[t.id]?.dias_sugeridos ?? diasNoMes;
 
   const executar = async (acao, sucesso) => {
     setMsg({});
@@ -205,7 +206,7 @@ export default function Folha() {
   const corpo = (t) => ({
     trabalhador_id: t.id,
     mes_ano: mes,
-    horas_trabalhadas: String(horas[t.id] ?? jornada(t)).replace(',', '.'),
+    dias_trabalhados: Number(dias[t.id] ?? diasPadrao(t)),
     // Vazio = o servidor calcula pelo calendário do trabalhador
     dias_uteis: uteis[t.id] === '' || uteis[t.id] == null ? undefined : Number(uteis[t.id]),
   });
@@ -271,8 +272,9 @@ export default function Folha() {
         </div>
       )}
       <p className="dica">
-        O salário é pago pelas horas trabalhadas: a jornada do cadastro (ex.: 200 h) é o salário cheio, menos horas
-        pagam proporcional. Horas além da jornada vão em Lançamentos, como horas extras.
+        Mês completo ({diasNoMes} dias) paga o salário cheio, como no mês comercial de 30 dias. Use menos dias só em
+        admissão, desligamento ou afastamento: o salário fica proporcional aos {diasNoMes} dias do mês. Faltas e horas
+        extras vão em Lançamentos.
         O vale-transporte segue os dias úteis do calendário de cada trabalhador; ajuste se houver feriado local ou folga.
       </p>
 
@@ -280,7 +282,7 @@ export default function Folha() {
         <table className="tabela-pilha">
           <thead>
             <tr>
-              <th>Trabalhador</th><th>Horas trabalhadas</th><th title="Dias úteis do vale-transporte">Dias úteis (VT)</th>
+              <th>Trabalhador</th><th>Dias trabalhados</th><th title="Dias úteis do vale-transporte">Dias úteis (VT)</th>
               <th className="num">Líquido</th><th className="num">Encargos / reserva</th><th>Situação</th><th><span className="oculto">Ações</span></th>
             </tr>
           </thead>
@@ -292,11 +294,11 @@ export default function Folha() {
               return (
                 <tr key={t.id}>
                   <td className="principal"><span><strong>{t.nome}</strong><br /><small>{ROTULOS.tipo_contrato[t.tipo_contrato]}</small></span></td>
-                  <td data-label="Horas trabalhadas">
-                    <span className="horas-folha">
-                      <input className="input-dias" type="number" min="0" max={jornada(t)} step="0.5" disabled={fechada}
-                        value={horas[t.id] ?? jornada(t)} onChange={(e) => setHoras({ ...horas, [t.id]: e.target.value })} />
-                      <small>de {jornada(t)} h</small>
+                  <td data-label="Dias trabalhados">
+                    <span className="dias-folha">
+                      <input className="input-dias" type="number" min="0" max={diasNoMes} disabled={fechada}
+                        value={dias[t.id] ?? diasPadrao(t)} onChange={(e) => setDias({ ...dias, [t.id]: e.target.value })} />
+                      <small>de {diasNoMes}</small>
                     </span>
                   </td>
                   <td data-label="Dias úteis (VT)">

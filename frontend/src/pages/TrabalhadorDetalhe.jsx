@@ -4,9 +4,9 @@ import { api } from '../api';
 import Reajustes from '../components/Reajustes';
 import TrabalhadorForm from '../components/TrabalhadorForm';
 import { Alerta, Badge, Campo } from '../components/ui';
-import { brl, cpfFmt, DIAS_SEMANA, ROTULOS, vtPorDia } from '../utils';
+import { brl, cpfFmt, dataBR, DIAS_SEMANA, hoje, ROTULOS, vtPorDia } from '../utils';
 
-const BENEFICIO_VAZIO = { tipo: 'vale_transporte', natureza: 'provento', descricao: '', valor: '' };
+const BENEFICIO_VAZIO = { tipo: 'vale_transporte', natureza: 'provento', descricao: '', valor: '', vigencia_inicio: hoje() };
 
 function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
   const [salario, setSalario] = useState(trabalhador.salario_base);
@@ -46,7 +46,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
 
   const editar = (b) => {
     setEditandoId(b.id);
-    setForm({ tipo: b.tipo, natureza: b.natureza, descricao: b.descricao || '', valor: b.valor });
+    setForm({ tipo: b.tipo, natureza: b.natureza, descricao: b.descricao || '', valor: b.valor, vigencia_inicio: b.vigencia_inicio });
   };
 
   const jornada = Number(trabalhador.horas_mensais);
@@ -72,7 +72,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
           </>
         )}
         <p className="dica">
-          Valor-hora (jornada de {jornada} h): <strong>{brl(valorHora)}</strong> · Hora extra 50%: {brl(valorHora * 1.5)} · 100%: {brl(valorHora * 2)}
+          Valor-hora (divisor {jornada} h): <strong>{brl(valorHora)}</strong> · Hora extra 50%: {brl(valorHora * 1.5)} · 100%: {brl(valorHora * 2)}
         </p>
       </section>
 
@@ -87,15 +87,16 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
         </p>
         <div className="tabela-container">
           <table>
-            <thead><tr><th>Tipo</th><th>Descrição</th><th>Tratamento na folha</th><th>Valor</th><th /></tr></thead>
+            <thead><tr><th>Tipo</th><th>Descrição</th><th>Tratamento na folha</th><th>Valor</th><th>Vigência</th><th /></tr></thead>
             <tbody>
-              {trabalhador.beneficios.length === 0 && <tr><td colSpan={5} className="vazio">Nenhum benefício cadastrado.</td></tr>}
+              {trabalhador.beneficios.length === 0 && <tr><td colSpan={6} className="vazio">Nenhum benefício cadastrado.</td></tr>}
               {trabalhador.beneficios.map((b) => (
                 <tr key={b.id}>
                   <td>{ROTULOS.beneficio[b.tipo]}</td>
                   <td>{b.descricao}</td>
                   <td><Badge tipo={b.natureza === 'provento' ? 'verde' : b.natureza === 'desconto' ? 'vermelho' : 'neutro'}>{ROTULOS.natureza[b.natureza]}</Badge></td>
                   <td>{brl(b.valor)}{vtPorDia(b) && ' / dia útil'}</td>
+                  <td>desde {dataBR(b.vigencia_inicio)}</td>
                   <td className="acoes-linha">
                     <button className="btn pequeno" onClick={() => editar(b)}>Editar</button>
                     <button className="btn pequeno perigo" onClick={() => excluir(b)}>Remover</button>
@@ -125,6 +126,9 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
             <Campo label={vtPorDia(form) ? 'Valor por dia útil (R$)' : 'Valor mensal (R$)'}
               dica={vtPorDia(form) ? 'Ida + volta de um dia de trabalho.' : undefined}>
               <input type="number" min="0" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} required />
+            </Campo>
+            <Campo label="Início da vigência" dica="Entra nas folhas a partir do mês desta data, inclusive nas de meses passados.">
+              <input type="date" value={form.vigencia_inicio} onChange={(e) => setForm({ ...form, vigencia_inicio: e.target.value })} required />
             </Campo>
           </div>
           {form.tipo === 'vale_transporte' && form.natureza === 'desconto' && (
