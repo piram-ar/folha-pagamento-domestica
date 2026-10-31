@@ -51,14 +51,16 @@ def criar(dados: EventoIn, db: Session = Depends(get_db)):
             raise HTTPException(status_code=422, detail="Informe a quantidade de horas extras")
         percentual = percentual if percentual is not None else Decimal("50")
         if valor is None:
-            valor = valor_hora_extra(salario_do_mes(trabalhador, dados.mes_ano), dados.quantidade_horas, percentual)
+            valor = valor_hora_extra(salario_do_mes(trabalhador, dados.mes_ano), trabalhador.horas_mensais,
+                                     dados.quantidade_horas, percentual)
     elif dados.tipo == TipoEvento.falta and valor is None and dados.quantidade_dias:
         valor = q(salario_do_mes(trabalhador, dados.mes_ano) / 30 * dados.quantidade_dias)
         descricao = descricao or f"{dados.quantidade_dias} dia(s) de falta"
     elif dados.tipo == TipoEvento.falta and valor is None:
         if not dados.quantidade_horas:
             raise HTTPException(status_code=422, detail="Informe as horas, os dias de falta ou o valor a descontar")
-        valor = valor_horas_falta(salario_do_mes(trabalhador, dados.mes_ano), dados.quantidade_horas)
+        valor = valor_horas_falta(salario_do_mes(trabalhador, dados.mes_ano), trabalhador.horas_mensais,
+                                  dados.quantidade_horas)
     if dados.tipo != TipoEvento.hora_extra:
         percentual = None
 

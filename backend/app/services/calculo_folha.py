@@ -47,17 +47,18 @@ def _fmt(valor: Decimal) -> str:
     return texto.replace(".", ",")
 
 
-def valor_hora(salario_base: Decimal) -> Decimal:
-    return Decimal(salario_base) / tabelas.DIVISOR_HORAS_MENSAL
+def valor_hora(salario_base: Decimal, horas_mensais: Decimal) -> Decimal:
+    """Salário dividido pela jornada mensal do trabalhador (cadastro)."""
+    return Decimal(salario_base) / Decimal(horas_mensais)
 
 
-def valor_hora_extra(salario_base: Decimal, horas: Decimal, percentual: Decimal) -> Decimal:
+def valor_hora_extra(salario_base: Decimal, horas_mensais: Decimal, horas: Decimal, percentual: Decimal) -> Decimal:
     fator = 1 + Decimal(percentual) / 100
-    return q(valor_hora(salario_base) * fator * Decimal(horas))
+    return q(valor_hora(salario_base, horas_mensais) * fator * Decimal(horas))
 
 
-def valor_horas_falta(salario_base: Decimal, horas: Decimal) -> Decimal:
-    return q(valor_hora(salario_base) * Decimal(horas))
+def valor_horas_falta(salario_base: Decimal, horas_mensais: Decimal, horas: Decimal) -> Decimal:
+    return q(valor_hora(salario_base, horas_mensais) * Decimal(horas))
 
 
 def vt_por_dia(beneficio) -> bool:
@@ -68,14 +69,28 @@ def vt_por_dia(beneficio) -> bool:
     return beneficio.tipo == TipoBeneficio.vale_transporte and beneficio.natureza != NaturezaBeneficio.desconto
 
 
-def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhados: int,
+def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, horas_trabalhadas: Decimal,
              dias_uteis: int | None = None) -> dict:
-    """Calcula todos os valores da folha do mês sem gravar nada."""
+    """Calcula os valores da folha do mês. Não faz commit, mas corrige na sessão o valor das horas
+    extras e dos atrasos lançados para a jornada e o salário atuais.
+
+    O salário é pago pelas horas trabalhadas, até a jornada mensal do cadastro (salário cheio); horas
+    além da jornada só entram como horas extras. O vale-transporte segue os dias úteis.
+    """
+    horas_mensais = Decimal(trabalhador.horas_mensais)
+    horas_trabalhadas = Decimal(horas_trabalhadas)
+    if horas_trabalhadas > horas_mensais:
+        raise ValueError(
+            f"{_fmt(horas_trabalhadas)} h passa da jornada de {_fmt(horas_mensais)} h de {trabalhador.nome}. "
+            "Lance o excedente como horas extras."
+        )
     if dias_uteis is None:
         dias_uteis = calcular_dias_uteis(mes_ano, trabalhador.dias_semana_trabalho)
     salario_base = salario_do_mes(trabalhador, mes_ano)  # considera reajustes vigentes no mês
-    dias = min(Decimal(dias_trabalhados), tabelas.DIAS_MES_COMERCIAL)
-    salario_proporcional = q(salario_base / tabelas.DIAS_MES_COMERCIAL * dias)
+    if horas_trabalhadas == horas_mensais:
+        salario_proporcional = q(salario_base)
+    else:
+        salario_proporcional = q(valor_hora(salario_base, horas_mensais) * horas_trabalhadas)
 
     eventos = db.scalars(
         select(EventoFolha)
@@ -93,8 +108,8 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
             })
 
     clt = trabalhador.tipo_contrato == TipoContrato.com_registro
-    item("001", "Salário" if clt else "Serviços prestados", f"{dias_trabalhados} dias", "provento", salario_proporcional,
-         "1000")
+    item("001", "Salário" if clt else "Serviços prestados", f"{_fmt(horas_trabalhadas)} h", "provento",
+         salario_proporcional, "1000")
 
     # Horas extras agrupadas por percentual
     he_por_pct: dict[Decimal, list[Decimal]] = defaultdict(lambda: [ZERO, ZERO])
@@ -102,6 +117,13 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
     horas_atraso = ZERO
     qtd_vales = 0
     for ev in eventos:
+        # Lançamentos em horas valem pela jornada e pelo salário do mês (corrige os feitos antes de um
+        # reajuste ou de mudança na jornada)
+        if ev.tipo == TipoEvento.hora_extra and ev.quantidade_horas:
+            ev.valor = valor_hora_extra(salario_base, horas_mensais, ev.quantidade_horas,
+                                        ev.percentual_adicional or 50)
+        elif ev.tipo == TipoEvento.falta and ev.quantidade_horas:
+            ev.valor = valor_horas_falta(salario_base, horas_mensais, ev.quantidade_horas)
         if ev.tipo == TipoEvento.hora_extra:
             pct = Decimal(ev.percentual_adicional or 50)
             he_por_pct[pct][0] += Decimal(ev.quantidade_horas or 0)
@@ -183,6 +205,7 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
     salario_liquido = q(total_proventos - total_descontos)
 
     return {
+        "horas_mensais": horas_mensais,
         "dias_uteis": dias_uteis,
         "salario_base": q(salario_base),
         "salario_proporcional": salario_proporcional,
@@ -202,13 +225,13 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
             "itens": itens,
             "beneficios_informativos": informativos,
             "encargos": {"titulo": titulo_encargos, "itens": encargos, "total": str(total_encargos)},
-            "valor_hora": str(q(valor_hora(salario_base))),
+            "valor_hora": str(q(valor_hora(salario_base, horas_mensais))),
             "tabela_inss": tabela_inss,
         },
     }
 
 
-def gerar_ou_atualizar(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhados: int,
+def gerar_ou_atualizar(db: Session, trabalhador: Trabalhador, mes_ano: str, horas_trabalhadas: Decimal,
                        dias_uteis: int | None = None) -> FolhaPagamento:
     folha = db.scalar(
         select(FolhaPagamento).where(
@@ -218,12 +241,12 @@ def gerar_ou_atualizar(db: Session, trabalhador: Trabalhador, mes_ano: str, dias
     if folha and folha.status == StatusFolha.fechada:
         raise ValueError("A folha deste mês já está fechada. Reabra-a para recalcular.")
 
-    resultado = calcular(db, trabalhador, mes_ano, dias_trabalhados, dias_uteis)
+    resultado = calcular(db, trabalhador, mes_ano, horas_trabalhadas, dias_uteis)
     detalhamento = resultado.pop("detalhamento")
     if folha is None:
         folha = FolhaPagamento(trabalhador_id=trabalhador.id, mes_ano=mes_ano, status=StatusFolha.rascunho)
         db.add(folha)
-    folha.dias_trabalhados = dias_trabalhados
+    folha.horas_trabalhadas = horas_trabalhadas
     for campo, valor in resultado.items():
         setattr(folha, campo, valor)
     folha.detalhamento = json.dumps(detalhamento, ensure_ascii=False)

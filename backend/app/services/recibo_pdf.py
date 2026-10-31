@@ -76,6 +76,14 @@ def brl(valor) -> str:
     return texto.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def horas(valor) -> str:
+    """Horas sem zeros à direita (ex.: 176.50 -> '176,5 h')."""
+    texto = f"{Decimal(valor):f}"
+    if "." in texto:
+        texto = texto.rstrip("0").rstrip(".")
+    return texto.replace(".", ",") + " h"
+
+
 def formatar_cpf(cpf: str) -> str:
     if len(cpf) == 11 and cpf.isdigit():
         return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
@@ -311,7 +319,7 @@ def _recibo_servico(pdf: FPDF, folha: FolhaPagamento, detalhe: dict, contratante
         f"Eu, {t.nome}, inscrito(a) no CPF sob o nº {formatar_cpf(t.cpf)}, declaro que recebi de {pagador}, "
         f"a importância de R$ {brl(folha.salario_liquido)} ({valor_por_extenso(folha.salario_liquido)}), "
         f"referente ao pagamento de serviços domésticos prestados em {competencia_extenso(folha.mes_ano)} "
-        f"({folha.dias_trabalhados} dias)" + (f", no endereço {local}" if local else "") + ".",
+        f"({horas(folha.horas_trabalhadas)} de {horas(folha.horas_mensais)})" + (f", no endereço {local}" if local else "") + ".",
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
 

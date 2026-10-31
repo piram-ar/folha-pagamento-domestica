@@ -6,9 +6,7 @@ uma por vigência. A lista abaixo (2025) só é usada se não houver nenhuma tab
 import os
 from decimal import Decimal
 
-# Jornada do doméstico (LC 150/2015): 44h semanais -> divisor 220 para o valor-hora
-DIVISOR_HORAS_MENSAL = Decimal(os.getenv("DIVISOR_HORAS_MENSAL", "220"))
-# Mês comercial para o salário proporcional
+# Mês comercial: converte faltas lançadas em dias para valor
 DIAS_MES_COMERCIAL = Decimal("30")
 
 # (teto da faixa, alíquota em fração)

@@ -51,7 +51,7 @@ def calcular(dados: CalcularFolhaIn, db: Session = Depends(get_db)):
     """Calcula (ou recalcula) a folha do mês e grava como rascunho."""
     trabalhador = obter_trabalhador(db, dados.trabalhador_id)
     try:
-        folha = gerar_ou_atualizar(db, trabalhador, dados.mes_ano, dados.dias_trabalhados, dados.dias_uteis)
+        folha = gerar_ou_atualizar(db, trabalhador, dados.mes_ano, dados.horas_trabalhadas, dados.dias_uteis)
     except ValueError as erro:
         raise HTTPException(status_code=409, detail=str(erro))
     return _saida(folha)

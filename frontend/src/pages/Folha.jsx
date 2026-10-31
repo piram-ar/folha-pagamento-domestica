@@ -150,7 +150,7 @@ export default function Folha() {
   const [folhas, setFolhas] = useState([]);
   const [todas, setTodas] = useState([]);
   const [pagando, setPagando] = useState(null);
-  const [dias, setDias] = useState({});
+  const [horas, setHoras] = useState({});
   const [uteis, setUteis] = useState({});
   const [sugestao, setSugestao] = useState({});
   const [detalhe, setDetalhe] = useState(null);
@@ -172,7 +172,7 @@ export default function Folha() {
       ]);
       setFolhas(lista);
       setTodas(historico);
-      setDias(Object.fromEntries(lista.map((f) => [f.trabalhador_id, f.dias_trabalhados])));
+      setHoras(Object.fromEntries(lista.map((f) => [f.trabalhador_id, Number(f.horas_trabalhadas)])));
       const porId = Object.fromEntries(sugeridos.map((s) => [s.trabalhador_id, s]));
       setSugestao(porId);
       // Folha já calculada mantém os dias úteis usados; senão, sugere pelo calendário do trabalhador
@@ -187,8 +187,10 @@ export default function Folha() {
   const linhas = [
     ...trabalhadores,
     ...folhas.filter((f) => !trabalhadores.some((t) => t.id === f.trabalhador_id))
-      .map((f) => ({ id: f.trabalhador_id, nome: f.trabalhador_nome, tipo_contrato: f.tipo_contrato })),
+      .map((f) => ({ id: f.trabalhador_id, nome: f.trabalhador_nome, tipo_contrato: f.tipo_contrato, horas_mensais: f.horas_mensais })),
   ];
+  // Jornada do cadastro: salário cheio; sem folha calculada, o mês começa completo
+  const jornada = (t) => Number(t.horas_mensais);
 
   const executar = async (acao, sucesso) => {
     setMsg({});
@@ -203,7 +205,7 @@ export default function Folha() {
   const corpo = (t) => ({
     trabalhador_id: t.id,
     mes_ano: mes,
-    dias_trabalhados: Number(dias[t.id] ?? 30),
+    horas_trabalhadas: String(horas[t.id] ?? jornada(t)).replace(',', '.'),
     // Vazio = o servidor calcula pelo calendário do trabalhador
     dias_uteis: uteis[t.id] === '' || uteis[t.id] == null ? undefined : Number(uteis[t.id]),
   });
@@ -269,15 +271,16 @@ export default function Folha() {
         </div>
       )}
       <p className="dica">
-        Dias trabalhados: 30 é o mês completo; use menos só em admissão ou desligamento.
-        Os dias úteis do vale-transporte vêm do calendário de cada trabalhador; ajuste se houver feriado local ou folga.
+        O salário é pago pelas horas trabalhadas: a jornada do cadastro (ex.: 200 h) é o salário cheio, menos horas
+        pagam proporcional. Horas além da jornada vão em Lançamentos, como horas extras.
+        O vale-transporte segue os dias úteis do calendário de cada trabalhador; ajuste se houver feriado local ou folga.
       </p>
 
       <div className="tabela-container">
         <table className="tabela-pilha">
           <thead>
             <tr>
-              <th>Trabalhador</th><th>Dias</th><th title="Dias úteis do vale-transporte">Dias úteis (VT)</th>
+              <th>Trabalhador</th><th>Horas trabalhadas</th><th title="Dias úteis do vale-transporte">Dias úteis (VT)</th>
               <th className="num">Líquido</th><th className="num">Encargos / reserva</th><th>Situação</th><th><span className="oculto">Ações</span></th>
             </tr>
           </thead>
@@ -289,9 +292,12 @@ export default function Folha() {
               return (
                 <tr key={t.id}>
                   <td className="principal"><span><strong>{t.nome}</strong><br /><small>{ROTULOS.tipo_contrato[t.tipo_contrato]}</small></span></td>
-                  <td data-label="Dias trabalhados">
-                    <input className="input-dias" type="number" min="0" max="31" disabled={fechada}
-                      value={dias[t.id] ?? 30} onChange={(e) => setDias({ ...dias, [t.id]: e.target.value })} />
+                  <td data-label="Horas trabalhadas">
+                    <span className="horas-folha">
+                      <input className="input-dias" type="number" min="0" max={jornada(t)} step="0.5" disabled={fechada}
+                        value={horas[t.id] ?? jornada(t)} onChange={(e) => setHoras({ ...horas, [t.id]: e.target.value })} />
+                      <small>de {jornada(t)} h</small>
+                    </span>
                   </td>
                   <td data-label="Dias úteis (VT)">
                     {sugestao[t.id]?.tem_vt_diario ? (

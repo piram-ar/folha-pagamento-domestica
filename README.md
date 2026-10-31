@@ -117,8 +117,8 @@ cd frontend && npm install && npm run dev                                    # h
 
 | Item | Regra |
 |---|---|
-| Salário proporcional | `salário base ÷ 30 × dias trabalhados` (mês comercial; 30 = mês cheio) |
-| Valor-hora | `salário base ÷ 220` (44h semanais, LC 150/2015) |
+| Salário do mês | pago pelas **horas trabalhadas**: com a jornada mensal do cadastro (padrão 200 h) é o salário cheio; com menos, `valor-hora × horas trabalhadas`. Não se lança mais horas que a jornada: o excedente é hora extra |
+| Valor-hora | `salário base ÷ jornada mensal` do trabalhador (máx. 220 h, LC 150/2015). Horas extras e atrasos são recalculados ao calcular a folha |
 | Hora extra | `valor-hora × (1 + adicional) × horas`, adicional 50% ou 100% |
 | Falta | por dias (`salário ÷ 30 × dias`) ou por horas (`valor-hora × horas`) |
 | Vales/adiantamentos | somados no mês e descontados no fechamento |

@@ -33,7 +33,7 @@ export default function Lancamentos() {
 
   const trabalhador = trabalhadores.find((t) => String(t.id) === trabalhadorId);
   const salario = Number(trabalhador?.salario_base || 0);
-  const valorHora = salario / 220;
+  const valorHora = salario / Number(trabalhador?.horas_mensais || 200);
   const set = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
 
   // Pré-visualização do valor calculado (o backend recalcula com precisão)

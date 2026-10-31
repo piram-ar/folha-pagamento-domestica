@@ -4,7 +4,7 @@ import { cpfFmt, DIAS_SEMANA, hoje } from '../utils';
 
 const VAZIO = {
   nome: '', cpf: '', tipo_contrato: 'com_registro', salario_base: '', data_admissao: hoje(), ativo: true,
-  dias_semana_trabalho: '12345',
+  dias_semana_trabalho: '12345', horas_mensais: 200,
   dia_pagamento_salario: 5, salario_dia_util: true,
   adiantamento_acordado: false, dia_pagamento_adiantamento: 20, adiantamento_dia_util: false,
 };
@@ -50,6 +50,7 @@ export default function TrabalhadorForm({ inicial, onSalvar, onCancelar, textoBo
       await onSalvar({
         ...form,
         salario_base: String(form.salario_base).replace(',', '.'),
+        horas_mensais: String(form.horas_mensais).replace(',', '.'),
         dia_pagamento_salario: Number(form.dia_pagamento_salario),
         dia_pagamento_adiantamento: form.adiantamento_acordado ? Number(form.dia_pagamento_adiantamento) : null,
         funcao: form.funcao?.trim() || null,
@@ -87,6 +88,10 @@ export default function TrabalhadorForm({ inicial, onSalvar, onCancelar, textoBo
             <input value={form.funcao || ''} onChange={set('funcao')} placeholder="Empregado(a) doméstico(a)" maxLength={120} />
           </Campo>
         )}
+        <Campo label="Jornada mensal (horas)"
+          dica="Horas do salário cheio e divisor do valor-hora. Mês com menos horas paga proporcional; acima disso, só como hora extra.">
+          <input type="number" min="1" max="220" step="0.5" value={form.horas_mensais} onChange={set('horas_mensais')} required />
+        </Campo>
         <Campo label={form.tipo_contrato === 'com_registro' ? 'Data de admissão' : 'Data de início'}>
           <input type="date" value={form.data_admissao} onChange={set('data_admissao')} required />
         </Campo>

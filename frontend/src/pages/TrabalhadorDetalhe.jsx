@@ -49,7 +49,8 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
     setForm({ tipo: b.tipo, natureza: b.natureza, descricao: b.descricao || '', valor: b.valor });
   };
 
-  const valorHora = Number(trabalhador.salario_base) / 220;
+  const jornada = Number(trabalhador.horas_mensais);
+  const valorHora = Number(trabalhador.salario_base) / jornada;
   const cotaVT = Number(trabalhador.salario_base) * 0.06;
 
   return (
@@ -71,7 +72,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
           </>
         )}
         <p className="dica">
-          Valor-hora (divisor 220h): <strong>{brl(valorHora)}</strong> · Hora extra 50%: {brl(valorHora * 1.5)} · 100%: {brl(valorHora * 2)}
+          Valor-hora (jornada de {jornada} h): <strong>{brl(valorHora)}</strong> · Hora extra 50%: {brl(valorHora * 1.5)} · 100%: {brl(valorHora * 2)}
         </p>
       </section>
 

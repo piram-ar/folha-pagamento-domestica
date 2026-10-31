@@ -63,6 +63,7 @@ def _enum(enum_cls):
 
 
 Dinheiro = Numeric(12, 2)
+Horas = Numeric(6, 2)
 
 
 class Usuario(Base):
@@ -119,6 +120,8 @@ class Trabalhador(Base):
     dia_pagamento_adiantamento: Mapped[Optional[int]] = mapped_column(Integer)
     adiantamento_dia_util: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     funcao: Mapped[Optional[str]] = mapped_column(String(120))  # cargo impresso no holerite
+    # Jornada contratada no mês: salário cheio com essas horas e divisor do valor-hora
+    horas_mensais: Mapped[Decimal] = mapped_column(Horas, default=Decimal("200"), server_default="200")
 
     beneficios: Mapped[list["BeneficioFixo"]] = relationship(
         back_populates="trabalhador", cascade="all, delete-orphan"
@@ -213,7 +216,8 @@ class FolhaPagamento(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     trabalhador_id: Mapped[int] = mapped_column(ForeignKey("trabalhadores.id", ondelete="CASCADE"), index=True)
     mes_ano: Mapped[str] = mapped_column(String(7), index=True)
-    dias_trabalhados: Mapped[int] = mapped_column(Integer)
+    horas_trabalhadas: Mapped[Decimal] = mapped_column(Horas)
+    horas_mensais: Mapped[Decimal] = mapped_column(Horas)  # jornada do trabalhador no cálculo (congelada)
     dias_uteis: Mapped[Optional[int]] = mapped_column(Integer)  # base do vale-transporte no mês
     salario_base: Mapped[Decimal] = mapped_column(Dinheiro)  # congelado no momento do cálculo
     salario_proporcional: Mapped[Decimal] = mapped_column(Dinheiro)

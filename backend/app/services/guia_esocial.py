@@ -13,7 +13,7 @@ from fpdf.enums import XPos, YPos
 
 from ..models import FolhaPagamento
 from .esocial import AUTOMATICAS, RUBRICAS, rubrica_do_item
-from .recibo_pdf import brl, celula_ajustada, competencia_extenso, formatar_cpf, referencia_exibida
+from .recibo_pdf import brl, celula_ajustada, competencia_extenso, formatar_cpf, horas, referencia_exibida
 from .salario import inicio_do_mes
 
 
@@ -98,7 +98,8 @@ def gerar_pdf(folhas: list[FolhaPagamento], mes_ano: str) -> bytes:
         pdf.cell(largura, 7, f"{f.trabalhador.nome} - CPF {formatar_cpf(f.trabalhador.cpf)}", border="B",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Helvetica", "", 8)
-        pdf.cell(largura, 5, f"Salário do mês: R$ {brl(f.salario_base)}  -  Dias trabalhados: {f.dias_trabalhados}",
+        pdf.cell(largura, 5, f"Salário do mês: R$ {brl(f.salario_base)}  -  Horas trabalhadas: "
+                 f"{horas(f.horas_trabalhadas)} de {horas(f.horas_mensais)}",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         for alerta in _alertas(f):
             pdf.set_text_color(160, 60, 0)

@@ -19,6 +19,8 @@ from .models import (
 
 MesAno = Annotated[str, StringConstraints(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
 Valor = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
+# LC 150/2015: no máximo 44 h semanais, ou 220 h no mês
+HorasMensais = Annotated[Decimal, Field(gt=0, le=220, max_digits=6, decimal_places=2)]
 
 
 class ORM(BaseModel):
@@ -121,6 +123,7 @@ class TrabalhadorBase(BaseModel):
     dia_pagamento_adiantamento: Optional[DiaPagamento] = None
     adiantamento_dia_util: bool = False
     funcao: Optional[str] = Field(default=None, max_length=120)
+    horas_mensais: HorasMensais = Decimal("200")
 
     @model_validator(mode="after")
     def _pagamentos(self):
@@ -155,6 +158,7 @@ class TrabalhadorUpdate(BaseModel):
     dia_pagamento_adiantamento: Optional[DiaPagamento] = None
     adiantamento_dia_util: Optional[bool] = None
     funcao: Optional[str] = Field(default=None, max_length=120)
+    horas_mensais: Optional[HorasMensais] = None
 
     @field_validator("cpf")
     @classmethod
@@ -198,6 +202,7 @@ class TrabalhadorOut(ORM):
     dia_pagamento_adiantamento: Optional[int]
     adiantamento_dia_util: bool
     funcao: Optional[str]
+    horas_mensais: Decimal
 
 
 class TrabalhadorDetalheOut(TrabalhadorOut):
@@ -325,7 +330,8 @@ class EventoOut(ORM):
 class CalcularFolhaIn(BaseModel):
     trabalhador_id: int
     mes_ano: MesAno
-    dias_trabalhados: int = Field(ge=0, le=31)
+    # Horas trabalhadas no mês, até a jornada do trabalhador; o que passar disso é hora extra
+    horas_trabalhadas: Annotated[Decimal, Field(ge=0, le=220, max_digits=6, decimal_places=2)]
     # Dias úteis para o vale-transporte; se omitido, calcula pelo calendário do trabalhador
     dias_uteis: Optional[int] = Field(default=None, ge=0, le=31)
 
@@ -342,7 +348,8 @@ class FolhaOut(ORM):
     trabalhador_nome: str
     tipo_contrato: TipoContrato
     mes_ano: str
-    dias_trabalhados: int
+    horas_trabalhadas: Decimal
+    horas_mensais: Decimal
     dias_uteis: Optional[int]
     salario_base: Decimal
     salario_proporcional: Decimal
