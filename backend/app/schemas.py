@@ -394,6 +394,8 @@ class GozoIn(BaseModel):
     historico_ferias_id: Optional[int] = None  # se omitido, abate do período mais antigo com saldo
     data_inicio: date
     dias: int = Field(ge=1, le=30)
+    # Abono pecuniário: dias vendidos, até 1/3 dos dias do período (10 de 30)
+    dias_abono: int = Field(default=0, ge=0, le=10)
     observacao: Optional[str] = Field(default=None, max_length=255)
     data_pagamento: Optional[date] = None  # padrão: 2 dias antes do início
 
@@ -408,6 +410,7 @@ class GozoOut(ORM):
     data_inicio: date
     data_fim: date
     dias: int
+    dias_abono: int = 0
     observacao: Optional[str]
     # Pagamento (vazio enquanto não calculado)
     data_pagamento: Optional[date] = None
@@ -415,6 +418,7 @@ class GozoOut(ORM):
     media_variaveis: Optional[Decimal] = None
     valor_ferias: Optional[Decimal] = None
     valor_terco: Optional[Decimal] = None
+    valor_abono: Optional[Decimal] = None  # abono pecuniário + 1/3 sobre ele
     inss: Optional[Decimal] = None
     encargos: Optional[Decimal] = None
     liquido: Optional[Decimal] = None

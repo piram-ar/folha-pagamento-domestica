@@ -68,7 +68,7 @@ def pagamentos_do_ano(t: Trabalhador, ano: int) -> dict:
 
     for g in _gozos_calculados(t):
         if g.data_pagamento.year == ano:
-            valores["ferias"] += g.bruto  # os encargos das férias entram na DAE do mês do gozo (folha)
+            valores["ferias"] += g.total_bruto  # os encargos das férias entram na DAE do mês do gozo (folha)
             if not g.pago_em:
                 em_aberto += Decimal(g.liquido)
                 pendentes += 1
@@ -109,7 +109,7 @@ def provisoes(t: Trabalhador, hoje: date | None = None) -> dict:
         prov_13[int(mes[:4])] += base / 12
 
     gozos = _gozos_calculados(t)
-    ferias_pagas = sum((g.bruto for g in gozos if g.pago_em), ZERO)
+    ferias_pagas = sum((g.total_bruto for g in gozos if g.pago_em), ZERO)
     encargos_pagos = sum((Decimal(g.encargos) for g in gozos if g.pago_em), ZERO)
 
     decimo = []

@@ -42,6 +42,10 @@ def calcular_pagamento(db: Session, gozo: GozoFerias, data_pagamento: date | Non
     valor_ferias = valor_salario + valor_media
     terco = q(valor_ferias / 3)
     bruto = valor_ferias + terco
+    # Abono pecuniário (LC 150/2015, art. 17 §3): os dias vendidos pela mesma remuneração, com 1/3;
+    # tem natureza indenizatória, sem INSS nem FGTS
+    abono = q((salario + media) / tabelas.DIAS_MES_COMERCIAL * gozo.dias_abono)
+    terco_abono = q(abono / 3)
 
     itens = [
         {"descricao": "Férias", "referencia": f"{gozo.dias} dias", "tipo": "provento", "valor": str(valor_salario)},
@@ -51,6 +55,11 @@ def calcular_pagamento(db: Session, gozo: GozoFerias, data_pagamento: date | Non
                       "tipo": "provento", "valor": str(valor_media)})
     itens.append({"descricao": "1/3 constitucional de férias", "referencia": "1/3", "tipo": "provento",
                   "valor": str(terco)})
+    if abono:
+        itens.append({"descricao": "Abono pecuniário de férias", "referencia": f"{gozo.dias_abono} dias",
+                      "tipo": "provento", "valor": str(abono)})
+        itens.append({"descricao": "1/3 sobre abono pecuniário", "referencia": "1/3", "tipo": "provento",
+                      "valor": str(terco_abono)})
 
     inss = encargos = ZERO
     tabela_inss = None
@@ -67,9 +76,10 @@ def calcular_pagamento(db: Session, gozo: GozoFerias, data_pagamento: date | Non
     gozo.media_variaveis = media
     gozo.valor_ferias = valor_ferias
     gozo.valor_terco = terco
+    gozo.valor_abono = abono + terco_abono
     gozo.inss = inss
     gozo.encargos = encargos
-    gozo.liquido = bruto - inss
+    gozo.liquido = bruto + abono + terco_abono - inss
     gozo.detalhamento = json.dumps({"itens": itens, "tabela_inss": tabela_inss}, ensure_ascii=False)
     gozo.calculado_em = datetime.now()
     return gozo

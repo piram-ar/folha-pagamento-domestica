@@ -112,7 +112,8 @@ def recibo_ferias(gozo: GozoFerias, contratante: Contratante | None) -> bytes:
     ]
     referente = (f"às férias de {gozo.dias} dias gozadas de {gozo.data_inicio:%d/%m/%Y} a {gozo.data_fim:%d/%m/%Y}, "
                  f"acrescidas de 1/3, do período aquisitivo de {periodo.periodo_aquisitivo_inicio:%d/%m/%Y} a "
-                 f"{periodo.periodo_aquisitivo_fim:%d/%m/%Y}")
+                 f"{periodo.periodo_aquisitivo_fim:%d/%m/%Y}"
+                 + (f", e ao abono pecuniário de {gozo.dias_abono} dias vendidos" if gozo.dias_abono else ""))
     return _documento("RECIBO DE FÉRIAS", periodo.trabalhador, contratante, campos, detalhe.get("itens", []),
                       Decimal(gozo.liquido), referente)
 

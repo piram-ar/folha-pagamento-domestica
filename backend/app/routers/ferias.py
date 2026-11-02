@@ -98,11 +98,18 @@ def registrar_gozo(trabalhador_id: int, dados: GozoIn, db: Session = Depends(get
         if periodo is None:
             raise HTTPException(status_code=422, detail="Não há saldo de férias disponível")
 
-    if dados.dias > periodo.saldo_dias:
+    if dados.dias + dados.dias_abono > periodo.saldo_dias:
         raise HTTPException(
             status_code=422,
             detail=f"Saldo insuficiente no período: disponível {periodo.saldo_dias} dia(s)",
         )
+    if dados.dias_abono:
+        limite = periodo.dias_adquiridos // 3 - sum(g.dias_abono or 0 for g in periodo.gozos)
+        if dados.dias_abono > limite:
+            raise HTTPException(
+                status_code=422,
+                detail=f"O abono pecuniário vai até 1/3 dos dias do período: restam {max(limite, 0)} dia(s) para vender",
+            )
 
     data_fim = dados.data_inicio + timedelta(days=dados.dias - 1)
     conflito = db.scalar(
@@ -117,9 +124,10 @@ def registrar_gozo(trabalhador_id: int, dados: GozoIn, db: Session = Depends(get
     if conflito:
         raise HTTPException(status_code=409, detail="Já existem férias registradas nesse intervalo de datas")
 
-    gozo = GozoFerias(data_inicio=dados.data_inicio, data_fim=data_fim, dias=dados.dias, observacao=dados.observacao)
+    gozo = GozoFerias(data_inicio=dados.data_inicio, data_fim=data_fim, dias=dados.dias, dias_abono=dados.dias_abono,
+                      observacao=dados.observacao)
     periodo.gozos.append(gozo)
-    periodo.dias_gozados += dados.dias
+    periodo.dias_gozados += gozo.dias_do_periodo
     periodo.saldo_dias = periodo.dias_adquiridos - periodo.dias_gozados
     calcular_pagamento(db, gozo, dados.data_pagamento)
     db.commit()
@@ -213,7 +221,7 @@ def excluir_gozo(gozo_id: int, db: Session = Depends(get_db)):
     if gozo.pago_em:
         raise HTTPException(status_code=409, detail="Férias já pagas: desfaça o pagamento antes de excluir")
     periodo = gozo.periodo
-    periodo.dias_gozados -= gozo.dias
+    periodo.dias_gozados -= gozo.dias_do_periodo
     periodo.saldo_dias = periodo.dias_adquiridos - periodo.dias_gozados
     db.delete(gozo)
     db.commit()

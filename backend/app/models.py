@@ -209,6 +209,8 @@ class GozoFerias(Base):
     data_inicio: Mapped[date] = mapped_column(Date)
     data_fim: Mapped[date] = mapped_column(Date)
     dias: Mapped[int] = mapped_column(Integer)
+    # Abono pecuniário: dias vendidos (até 1/3 do período), trabalhados e pagos à parte com 1/3
+    dias_abono: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     observacao: Mapped[Optional[str]] = mapped_column(String(255))
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
     # Pagamento das férias (salário dos dias + 1/3), feito até 2 dias antes do início do gozo.
@@ -218,6 +220,7 @@ class GozoFerias(Base):
     media_variaveis: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)  # média mensal das horas extras
     valor_ferias: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
     valor_terco: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
+    valor_abono: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)  # abono + 1/3 sobre ele, sem INSS
     inss: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
     encargos: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)  # do empregador (INSS patronal, FGTS...)
     liquido: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
@@ -229,7 +232,17 @@ class GozoFerias(Base):
 
     @property
     def bruto(self) -> Decimal:
+        """Férias gozadas + 1/3: base do INSS e do FGTS (o abono pecuniário não entra)."""
         return Decimal(self.valor_ferias or 0) + Decimal(self.valor_terco or 0)
+
+    @property
+    def total_bruto(self) -> Decimal:
+        return self.bruto + Decimal(self.valor_abono or 0)
+
+    @property
+    def dias_do_periodo(self) -> int:
+        """Dias abatidos do saldo do período aquisitivo: gozados + vendidos."""
+        return self.dias + (self.dias_abono or 0)
 
 
 class FolhaPagamento(Base):
