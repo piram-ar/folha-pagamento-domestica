@@ -127,10 +127,18 @@ cd frontend && npm install && npm run dev                                    # h
 | **Com registro** | INSS do empregado (tabela progressiva) descontado no recibo. Encargos = estimativa da guia DAE: INSS do empregado + 8% patronal + 0,8% GILRAT + 8% FGTS + 3,2% FGTS compensatório |
 | **Sem registro** | Sem descontos legais. "Fundo de reserva" = 1/12 férias + 1/3 de férias + 1/12 13º (≈ 19,44% da remuneração) |
 | Férias | 30 dias a cada 12 meses desde a admissão; prazo de concessão de 12 meses após o período; alertas de vencimento |
+| Pagamento das férias | com e sem registro: `salário ÷ 30 × dias gozados` + média mensal das horas extras do período aquisitivo + **1/3**, pago até 2 dias antes do início; com registro, desconta o INSS. A folha dos meses de férias **desconta os dias de férias** do salário (já pagos antecipadamente) e calcula o INSS do mês sobre salário + férias, abatendo o já descontado no recibo de férias |
+| 13º salário | com e sem registro: `(salário de dezembro + média das horas extras) × avos ÷ 12` (1/12 por mês com 15 dias ou mais). 1ª parcela até 30/11 = metade, sem INSS; 2ª até 20/12 = integral − 1ª parcela − INSS (com registro). Sem 1ª parcela, a 2ª é a parcela única |
+| Provisões (reservas) | por mês trabalhado: 1/12 da remuneração para o 13º e 1/12 + 1/3 para as férias; com registro, mais os encargos do empregador (20%) sobre esses valores. Saldo = provisionado desde a admissão − férias e 13º já pagos. Meses sem folha calculada entram pelo salário do cadastro |
 
 Folha **fechada** congela os valores e bloqueia lançamentos do mês; apenas admins podem reabri-la.
-Ao pagar, marque a folha como **paga** (com a data); a lista "Folhas registradas", no fim da tela da folha,
-mostra todas as competências com a situação (paga/em aberto) e o total líquido ainda em aberto.
+Ao pagar, marque a folha como **paga** (com a data); a lista "Pagamentos registrados", no fim da tela da folha,
+mostra folhas, férias e parcelas do 13º com a situação (paga/em aberto) e o total líquido ainda em aberto.
+Os recibos de férias são gerados só na tela **Férias** (na lista da folha eles podem ser vistos); as parcelas
+do 13º são geradas e pagas na própria tela da folha.
+
+A tela **Início** mostra, por colaborador, os pagamentos do ano (salários, vale-transporte, vale-alimentação,
+outros benefícios, férias, 13º e encargos) e o saldo das reservas que o contratante deve manter guardado.
 
 > ⚠️ **Tabela do INSS:** cadastrada na tela **Tabela do INSS**, uma por vigência (vem com a de 2025).
 > Quando o governo publicar a tabela do ano (normalmente em janeiro), cadastre uma nova vigência: cada folha
@@ -153,6 +161,8 @@ ficam protegidos.
   devidos (estimativa da DAE).
 - **Sem vínculo:** recibo simples de prestação de serviços domésticos ("Eu, ..., CPF ..., declaro que recebi
   de ... a importância de R$ ... (valor por extenso)..."), com as duas vias na mesma folha A4.
+- **Férias e 13º:** recibo próprio (duas vias), com o período aquisitivo e de gozo ou os avos do 13º, a
+  discriminação (férias, média, 1/3, INSS / 13º, adiantamento, INSS) e o líquido por extenso.
 
 **eSocial:** o módulo do empregador doméstico não aceita importação de arquivos. Na tela da folha, a
 **Guia de lançamento** (PDF ou CSV) lista, por empregado, as rubricas e os valores a digitar em

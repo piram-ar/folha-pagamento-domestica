@@ -491,6 +491,31 @@ tfoot tr.destaque td { background: var(--verde-claro); font-size: 1.08rem; }
 }
 .espaco-acima { margin-top: 14px; }
 
+/* ---------- Início: pagamentos do ano e reservas ---------- */
+.cartoes-resumo { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.cartao-resumo {
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--superficie); border: 1px solid var(--linha); border-radius: 10px; padding: 16px;
+}
+.cartao-resumo header strong { display: block; font-size: 1.05rem; }
+.cartao-resumo header small, .cartao-resumo > small { color: var(--suave); }
+.linhas-resumo { margin: 0; }
+.linhas-resumo div {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px;
+  padding: 6px 0; border-bottom: 1px dashed var(--linha-forte);
+}
+.linhas-resumo dt { color: var(--suave); }
+.linhas-resumo dd { margin: 0; font-weight: 600; text-align: right; white-space: nowrap; }
+.linhas-resumo dd.detalhe { flex-basis: 100%; text-align: left; font-weight: 400; color: var(--suave); font-size: .8rem; white-space: normal; }
+.linhas-resumo .zerado dd { color: var(--suave); font-weight: 400; }
+.cartao-resumo footer { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: auto; }
+.cartao-resumo footer strong { font-size: 1.3rem; font-stretch: 87.5%; }
+.reserva-total { text-align: right; }
+.reserva-total strong { display: block; font-size: 2rem; font-weight: 800; font-stretch: 75%; line-height: 1.1; }
+.reserva-total small { color: var(--suave); }
+.parcela-13 { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.parcela-13 small { color: var(--suave); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

@@ -140,6 +140,10 @@ class Trabalhador(Base):
     reajustes: Mapped[list["ReajusteSalarial"]] = relationship(
         back_populates="trabalhador", cascade="all, delete-orphan", order_by="ReajusteSalarial.vigencia"
     )
+    decimos_terceiros: Mapped[list["DecimoTerceiro"]] = relationship(
+        back_populates="trabalhador", cascade="all, delete-orphan",
+        order_by="[DecimoTerceiro.ano, DecimoTerceiro.parcela]",
+    )
 
 
 class BeneficioFixo(Base):
@@ -207,8 +211,25 @@ class GozoFerias(Base):
     dias: Mapped[int] = mapped_column(Integer)
     observacao: Mapped[Optional[str]] = mapped_column(String(255))
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
+    # Pagamento das férias (salário dos dias + 1/3), feito até 2 dias antes do início do gozo.
+    # Vazio em gozos registrados antes do cálculo existir: calcula-se pela tela de férias.
+    data_pagamento: Mapped[Optional[date]] = mapped_column(Date)
+    salario_base: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
+    media_variaveis: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)  # média mensal das horas extras
+    valor_ferias: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
+    valor_terco: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
+    inss: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
+    encargos: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)  # do empregador (INSS patronal, FGTS...)
+    liquido: Mapped[Optional[Decimal]] = mapped_column(Dinheiro)
+    detalhamento: Mapped[Optional[str]] = mapped_column(Text)
+    calculado_em: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    pago_em: Mapped[Optional[date]] = mapped_column(Date)
 
     periodo: Mapped[HistoricoFerias] = relationship(back_populates="gozos")
+
+    @property
+    def bruto(self) -> Decimal:
+        return Decimal(self.valor_ferias or 0) + Decimal(self.valor_terco or 0)
 
 
 class FolhaPagamento(Base):
@@ -221,6 +242,9 @@ class FolhaPagamento(Base):
     dias_trabalhados: Mapped[int] = mapped_column(Integer)  # igual aos dias do mês = mês completo
     horas_mensais: Mapped[Decimal] = mapped_column(Horas)  # divisor do valor-hora no cálculo (congelado)
     dias_uteis: Mapped[Optional[int]] = mapped_column(Integer)  # base do vale-transporte no mês
+    # Dias de férias no mês: já pagos no recibo de férias, descontados do salário da folha
+    dias_ferias: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    desconto_ferias: Mapped[Decimal] = mapped_column(Dinheiro, default=0, server_default="0")
     salario_base: Mapped[Decimal] = mapped_column(Dinheiro)  # congelado no momento do cálculo
     salario_proporcional: Mapped[Decimal] = mapped_column(Dinheiro)
     total_horas_extras: Mapped[Decimal] = mapped_column(Dinheiro, default=0)
@@ -346,3 +370,31 @@ class ReajusteSalarial(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
 
     trabalhador: Mapped[Trabalhador] = relationship(back_populates="reajustes")
+
+
+class DecimoTerceiro(Base):
+    """Parcelas do 13º salário: 1ª (adiantamento, até 30/11) e 2ª (até 20/12, desconta a 1ª e o INSS).
+    Sem 1ª parcela, a 2ª é a parcela única."""
+
+    __tablename__ = "decimo_terceiro"
+    __table_args__ = (UniqueConstraint("trabalhador_id", "ano", "parcela"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trabalhador_id: Mapped[int] = mapped_column(ForeignKey("trabalhadores.id", ondelete="CASCADE"), index=True)
+    ano: Mapped[int] = mapped_column(Integer)
+    parcela: Mapped[int] = mapped_column(Integer)  # 1 ou 2
+    avos: Mapped[int] = mapped_column(Integer)
+    salario_base: Mapped[Decimal] = mapped_column(Dinheiro)
+    media_variaveis: Mapped[Decimal] = mapped_column(Dinheiro, default=0)
+    valor_integral: Mapped[Decimal] = mapped_column(Dinheiro)  # 13º do ano inteiro (avos/12)
+    valor_bruto: Mapped[Decimal] = mapped_column(Dinheiro)  # desta parcela; 1ª + 2ª = integral
+    adiantamento: Mapped[Decimal] = mapped_column(Dinheiro, default=0)  # 1ª parcela descontada na 2ª
+    inss: Mapped[Decimal] = mapped_column(Dinheiro, default=0)
+    encargos: Mapped[Decimal] = mapped_column(Dinheiro, default=0)  # do empregador
+    liquido: Mapped[Decimal] = mapped_column(Dinheiro)
+    data_pagamento: Mapped[date] = mapped_column(Date)
+    pago_em: Mapped[Optional[date]] = mapped_column(Date)
+    detalhamento: Mapped[Optional[str]] = mapped_column(Text)
+    calculado_em: Mapped[datetime] = mapped_column(DateTime)
+
+    trabalhador: Mapped[Trabalhador] = relationship(back_populates="decimos_terceiros")

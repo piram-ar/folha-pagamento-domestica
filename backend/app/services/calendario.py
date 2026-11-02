@@ -51,3 +51,20 @@ def dias_uteis(mes_ano: str, dias_semana: str = DIAS_SEMANA_PADRAO, a_partir_de:
         if str(d.isoweekday()) in dias_semana and d not in feriados:
             total += 1
     return total
+
+
+def meses_entre(inicio: date, fim: date) -> list[str]:
+    """Competências (AAAA-MM) de `inicio` a `fim`, inclusive; vazia se `fim` vem antes."""
+    meses = []
+    ano, mes = inicio.year, inicio.month
+    while (ano, mes) <= (fim.year, fim.month):
+        meses.append(f"{ano}-{mes:02d}")
+        ano, mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+    return meses
+
+
+def dias_em_comum(inicio: date, fim: date, mes_ano: str) -> int:
+    """Quantos dias do intervalo [inicio, fim] caem na competência."""
+    ano, mes = map(int, mes_ano.split("-"))
+    primeiro, ultimo = date(ano, mes, 1), date(ano, mes, calendar.monthrange(ano, mes)[1])
+    return max((min(fim, ultimo) - max(inicio, primeiro)).days + 1, 0)

@@ -13,7 +13,19 @@ from sqlalchemy import func, select
 from . import config
 from .database import SessionLocal
 from .models import PerfilUsuario, Usuario
-from .routers import auth, contratante, eventos, ferias, folha, inss, notificacoes, trabalhadores, usuarios
+from .routers import (
+    auth,
+    contratante,
+    decimo_terceiro,
+    eventos,
+    ferias,
+    folha,
+    inss,
+    notificacoes,
+    resumo,
+    trabalhadores,
+    usuarios,
+)
 from .security import gerar_hash_senha
 from .services.notificacoes import enviar_avisos_do_dia
 from .services.salario import aplicar_reajustes_vigentes
@@ -90,7 +102,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Folha Doméstica", version="1.0.0", lifespan=lifespan,
+    title="Folha Doméstica", version="1.1.0", lifespan=lifespan,
     docs_url="/api/docs", openapi_url="/api/openapi.json",
 )
 
@@ -104,7 +116,8 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-for modulo in (auth, usuarios, contratante, trabalhadores, eventos, folha, ferias, inss, notificacoes):
+for modulo in (auth, usuarios, contratante, trabalhadores, eventos, folha, ferias, decimo_terceiro, inss,
+               notificacoes, resumo):
     app.include_router(modulo.router, prefix="/api")
 app.include_router(notificacoes.publico, prefix="/api")
 

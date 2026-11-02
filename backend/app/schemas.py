@@ -1,7 +1,8 @@
+import json
 import re
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
@@ -355,6 +356,8 @@ class FolhaOut(ORM):
     dias_trabalhados: int
     horas_mensais: Decimal
     dias_uteis: Optional[int]
+    dias_ferias: int = 0
+    desconto_ferias: Decimal = Decimal("0")
     salario_base: Decimal
     salario_proporcional: Decimal
     total_horas_extras: Decimal
@@ -382,11 +385,21 @@ class PagamentoFolhaIn(BaseModel):
 
 # ---------- Férias ----------
 
+def _json(v):
+    """Detalhamento gravado como texto JSON no banco."""
+    return json.loads(v) if isinstance(v, str) else v
+
+
 class GozoIn(BaseModel):
     historico_ferias_id: Optional[int] = None  # se omitido, abate do período mais antigo com saldo
     data_inicio: date
     dias: int = Field(ge=1, le=30)
     observacao: Optional[str] = Field(default=None, max_length=255)
+    data_pagamento: Optional[date] = None  # padrão: 2 dias antes do início
+
+
+class CalcularFeriasIn(BaseModel):
+    data_pagamento: Optional[date] = None
 
 
 class GozoOut(ORM):
@@ -396,6 +409,30 @@ class GozoOut(ORM):
     data_fim: date
     dias: int
     observacao: Optional[str]
+    # Pagamento (vazio enquanto não calculado)
+    data_pagamento: Optional[date] = None
+    salario_base: Optional[Decimal] = None
+    media_variaveis: Optional[Decimal] = None
+    valor_ferias: Optional[Decimal] = None
+    valor_terco: Optional[Decimal] = None
+    inss: Optional[Decimal] = None
+    encargos: Optional[Decimal] = None
+    liquido: Optional[Decimal] = None
+    detalhamento: Optional[dict] = None
+    pago_em: Optional[date] = None
+
+    @field_validator("detalhamento", mode="before")
+    @classmethod
+    def _detalhamento(cls, v):
+        return _json(v)
+
+
+class PagamentoFeriasOut(GozoOut):
+    trabalhador_id: int
+    trabalhador_nome: str
+    tipo_contrato: TipoContrato
+    periodo_aquisitivo_inicio: date
+    periodo_aquisitivo_fim: date
 
 
 class PeriodoFeriasOut(ORM):
@@ -414,12 +451,59 @@ class PeriodoFeriasOut(ORM):
 class FeriasTrabalhadorOut(BaseModel):
     trabalhador_id: int
     trabalhador_nome: str
+    tipo_contrato: TipoContrato
     data_admissao: date
     saldo_total: int
     saldo_vencido: int
     periodo_atual: Optional[PeriodoFeriasOut]
     alertas: list[str]
     periodos: list[PeriodoFeriasOut]
+
+
+# ---------- 13º salário ----------
+
+class DecimoTerceiroIn(BaseModel):
+    trabalhador_id: int
+    ano: int = Field(ge=2000, le=2100)
+    parcela: Literal[1, 2]
+    data_pagamento: Optional[date] = None  # padrão: 30/11 (1ª) ou 20/12 (2ª)
+
+
+class DecimoTerceiroOut(ORM):
+    id: int
+    trabalhador_id: int
+    trabalhador_nome: str
+    tipo_contrato: TipoContrato
+    ano: int
+    parcela: int
+    avos: int
+    salario_base: Decimal
+    media_variaveis: Decimal
+    valor_integral: Decimal
+    valor_bruto: Decimal
+    adiantamento: Decimal
+    inss: Decimal
+    encargos: Decimal
+    liquido: Decimal
+    data_pagamento: date
+    pago_em: Optional[date]
+    detalhamento: Optional[dict] = None
+
+    @field_validator("detalhamento", mode="before")
+    @classmethod
+    def _detalhamento(cls, v):
+        return _json(v)
+
+
+class DecimoTerceiroPreviaOut(BaseModel):
+    trabalhador_id: int
+    trabalhador_nome: str
+    tipo_contrato: TipoContrato
+    avos: int
+    salario_base: Decimal
+    media_variaveis: Decimal
+    valor_integral: Decimal
+    parcelas: list[DecimoTerceiroOut]
 
 
 # ---------- Tabela do INSS ----------

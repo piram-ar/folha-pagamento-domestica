@@ -25,3 +25,6 @@ ALIQ_FGTS_INDENIZATORIO = Decimal(os.getenv("ALIQ_FGTS_INDENIZATORIO", "0.032"))
 
 # Dias de férias por período aquisitivo completo
 DIAS_FERIAS_POR_PERIODO = 30
+
+# Encargos do empregador sobre a remuneração (sem o INSS do empregado, que sai do salário)
+ALIQ_ENCARGOS_EMPREGADOR = ALIQ_INSS_PATRONAL + ALIQ_GILRAT + ALIQ_FGTS + ALIQ_FGTS_INDENIZATORIO

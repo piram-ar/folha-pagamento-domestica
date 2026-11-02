@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../api';
-import { Alerta, Badge, Campo } from '../components/ui';
-import { dataBR, hoje, ROTULOS, somarDias } from '../utils';
+import { abrirPdf, api } from '../api';
+import { MODO_APP } from '../plataforma';
+import { Alerta, Badge, Campo, Modal, ModalPagamento } from '../components/ui';
+import { brl, dataBR, hoje, ROTULOS, somarDias } from '../utils';
 
 const COR_SITUACAO = {
   em_aquisicao: 'azul', disponivel: 'verde', vence_em_breve: 'amarelo', vencido: 'vermelho', quitado: 'neutro',
@@ -9,10 +10,12 @@ const COR_SITUACAO = {
 
 function RegistrarGozo({ resumo, onRegistrado }) {
   const comSaldo = resumo.periodos.filter((p) => p.saldo_dias > 0);
-  const [form, setForm] = useState({ periodo: '', data_inicio: hoje(), dias: 15, observacao: '' });
+  const [form, setForm] = useState({ periodo: '', data_inicio: hoje(), dias: 15, observacao: '', data_pagamento: '' });
   const [msg, setMsg] = useState({});
   const periodo = comSaldo.find((p) => String(p.id) === form.periodo) || comSaldo[0];
   const dias = Number(form.dias) || 0;
+  // Pagamento até 2 dias antes do início (art. 145 da CLT)
+  const pagamento = form.data_pagamento || somarDias(form.data_inicio, -2);
 
   const enviar = async (e) => {
     e.preventDefault();
@@ -23,9 +26,10 @@ function RegistrarGozo({ resumo, onRegistrado }) {
         data_inicio: form.data_inicio,
         dias,
         observacao: form.observacao || null,
+        data_pagamento: pagamento,
       });
-      setMsg({ sucesso: `${dias} dias de férias registrados.` });
-      setForm({ ...form, observacao: '' });
+      setMsg({ sucesso: `${dias} dias de férias registrados e pagamento calculado. Gere o recibo em "Pagamento das férias".` });
+      setForm({ ...form, observacao: '', data_pagamento: '' });
       onRegistrado();
     } catch (err) { setMsg({ erro: err.message }); }
   };
@@ -52,6 +56,9 @@ function RegistrarGozo({ resumo, onRegistrado }) {
         <Campo label="Dias de gozo">
           <input type="number" min="1" max={periodo.saldo_dias} value={form.dias} onChange={(e) => setForm({ ...form, dias: e.target.value })} required />
         </Campo>
+        <Campo label="Pagamento das férias" dica="Até 2 dias antes do início.">
+          <input type="date" value={pagamento} onChange={(e) => setForm({ ...form, data_pagamento: e.target.value })} required />
+        </Campo>
         <Campo label="Observação">
           <input value={form.observacao} onChange={(e) => setForm({ ...form, observacao: e.target.value })} />
         </Campo>
@@ -68,6 +75,111 @@ function RegistrarGozo({ resumo, onRegistrado }) {
       )}
       <div className="acoes direita"><button className="btn primario">Registrar férias</button></div>
     </form>
+  );
+}
+
+/** Recalcula o pagamento (salário dos dias + média de horas extras + 1/3), podendo mudar a data. */
+function CalcularPagamento({ gozo, onClose, onConfirmar }) {
+  const [data, setData] = useState(gozo.data_pagamento || somarDias(gozo.data_inicio, -2));
+  return (
+    <Modal titulo="Calcular pagamento das férias" onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); onConfirmar(data); }}>
+        <p>Férias de {dataBR(gozo.data_inicio)} a {dataBR(gozo.data_fim)} ({gozo.dias} dias).</p>
+        <Campo label="Data do pagamento" dica="Até 2 dias antes do início das férias.">
+          <input type="date" value={data} onChange={(e) => setData(e.target.value)} required autoFocus />
+        </Campo>
+        <div className="acoes direita">
+          <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn primario">Calcular</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Valor de cada férias registrada, recibo (gerado só aqui) e situação do pagamento. */
+function PagamentosFerias({ resumo, onAlterado, onErro }) {
+  const [calculando, setCalculando] = useState(null);
+  const [pagando, setPagando] = useState(null);
+  const gozos = resumo.periodos.flatMap((p) => p.gozos).sort((a, b) => b.data_inicio.localeCompare(a.data_inicio));
+  if (!gozos.length) return <p className="vazio">Nenhuma férias registrada.</p>;
+
+  const executar = (acao) => acao().then(onAlterado).catch((e) => onErro(e.message));
+  const calcular = (g, data) => executar(async () => {
+    await api.post(`/ferias/gozos/${g.id}/calcular`, { data_pagamento: data });
+    setCalculando(null);
+  });
+  const pagar = (g, data) => executar(async () => {
+    await api.post(`/ferias/gozos/${g.id}/pagar`, { pago_em: data });
+    setPagando(null);
+  });
+  const desfazer = (g) => {
+    if (!window.confirm('Desfazer o pagamento destas férias? Elas voltam a ficar em aberto.')) return;
+    executar(() => api.del(`/ferias/gozos/${g.id}/pagamento`));
+  };
+  const recibo = (g) => abrirPdf(`/ferias/gozos/${g.id}/recibo.pdf`).catch((e) => onErro(e.message));
+
+  return (
+    <>
+      <div className="tabela-container">
+        <table className="tabela-pilha">
+          <thead>
+            <tr>
+              <th>Férias</th><th>Pagamento</th><th className="num">Férias</th><th className="num">1/3</th>
+              <th className="num">INSS</th><th className="num">Líquido</th><th>Situação</th><th><span className="oculto">Ações</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {gozos.map((g) => {
+              const calculado = g.valor_ferias != null;
+              return (
+                <tr key={g.id}>
+                  <td className="principal"><span><strong>{dataBR(g.data_inicio)} a {dataBR(g.data_fim)}</strong><br /><small>{g.dias} dias</small></span></td>
+                  <td data-label="Pagamento">{calculado ? dataBR(g.data_pagamento) : '—'}</td>
+                  <td className="num" data-label="Férias">{calculado ? brl(g.valor_ferias) : '—'}</td>
+                  <td className="num" data-label="1/3">{calculado ? brl(g.valor_terco) : '—'}</td>
+                  <td className="num" data-label="INSS">{calculado ? brl(g.inss) : '—'}</td>
+                  <td className="num" data-label="Líquido"><strong>{calculado ? brl(g.liquido) : '—'}</strong></td>
+                  <td data-label="Situação">
+                    {!calculado ? <Badge>Não calculado</Badge>
+                      : g.pago_em ? <Badge tipo="verde">Pago em {dataBR(g.pago_em)}</Badge>
+                        : <Badge tipo="vermelho">Em aberto</Badge>}
+                  </td>
+                  <td className="acoes-linha">
+                    {!g.pago_em && (
+                      <button className={`btn pequeno ${calculado ? '' : 'primario'}`} onClick={() => setCalculando(g)}>
+                        {calculado ? 'Recalcular' : 'Calcular pagamento'}
+                      </button>
+                    )}
+                    {calculado && (
+                      <button className="btn pequeno primario" onClick={() => recibo(g)}>
+                        {MODO_APP ? 'Enviar recibo' : 'Gerar recibo'}
+                      </button>
+                    )}
+                    {calculado && !g.pago_em && <button className="btn pequeno sucesso" onClick={() => setPagando(g)}>Marcar pago</button>}
+                    {g.pago_em && <button className="btn pequeno" onClick={() => desfazer(g)}>Desfazer</button>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="dica">
+        Férias = salário ÷ 30 × dias gozados, mais a média mensal das horas extras do período aquisitivo e o 1/3
+        constitucional{resumo.tipo_contrato === 'com_registro' ? ', menos o INSS' : ''}. Como esse valor é pago antes, a folha
+        dos meses de férias desconta os dias de férias do salário: recalcule a folha desses meses depois de registrar as férias.
+      </p>
+      {calculando && <CalcularPagamento gozo={calculando} onClose={() => setCalculando(null)} onConfirmar={(d) => calcular(calculando, d)} />}
+      {pagando && (
+        <ModalPagamento
+          descricao={`Férias de ${dataBR(pagando.data_inicio)} a ${dataBR(pagando.data_fim)}`}
+          valor={pagando.liquido}
+          onClose={() => setPagando(null)}
+          onConfirmar={(d) => pagar(pagando, d)}
+        />
+      )}
+    </>
   );
 }
 
@@ -152,6 +264,11 @@ export default function Ferias() {
                 </tbody>
               </table>
             </div>
+          </section>
+
+          <section className="painel">
+            <h3>Pagamento das férias</h3>
+            <PagamentosFerias resumo={resumo} onAlterado={carregar} onErro={setErro} />
           </section>
 
           <section className="painel">

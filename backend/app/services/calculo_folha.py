@@ -18,7 +18,7 @@ from ..models import (
     Trabalhador,
 )
 from . import tabelas
-from .calendario import dias_no_mes
+from .calendario import dias_em_comum, dias_no_mes
 from .calendario import dias_uteis as calcular_dias_uteis
 from .esocial import rubrica_beneficio
 from .inss import faixas_do_mes, inss_progressivo
@@ -72,6 +72,30 @@ def beneficio_vigente(beneficio, mes_ano: str) -> bool:
     return beneficio.vigencia_inicio.strftime("%Y-%m") <= mes_ano
 
 
+def media_horas_extras(trabalhador: Trabalhador, meses: list[str]) -> Decimal:
+    """Média mensal das horas extras nas folhas das competências informadas (base de férias e 13º)."""
+    if not meses:
+        return ZERO
+    total = sum((Decimal(f.total_horas_extras) for f in trabalhador.folhas if f.mes_ano in meses), ZERO)
+    return q(total / len(meses))
+
+
+def remuneracao_do_mes(folha: FolhaPagamento) -> Decimal:
+    """Remuneração do mês, contando os dias de férias (pagos à parte): base das provisões."""
+    return Decimal(folha.salario_bruto) + Decimal(folha.desconto_ferias or 0)
+
+
+def ferias_no_mes(trabalhador: Trabalhador, mes_ano: str) -> list[tuple]:
+    """(gozo, dias do gozo nesta competência) das férias que caem no mês."""
+    resultado = []
+    for periodo in trabalhador.historico_ferias:
+        for gozo in periodo.gozos:
+            dias = dias_em_comum(gozo.data_inicio, gozo.data_fim, mes_ano)
+            if dias:
+                resultado.append((gozo, dias))
+    return resultado
+
+
 def vt_por_dia(beneficio) -> bool:
     """Vale-transporte pago (no salário ou à parte) é cadastrado por dia e multiplicado pelos dias úteis.
 
@@ -107,11 +131,11 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
 
     itens: list[dict] = []
 
-    def item(codigo, descricao, referencia, tipo, valor, esocial=None):
+    def item(codigo, descricao, referencia, tipo, valor, esocial=None, beneficio=None):
         if valor:
             itens.append({
                 "codigo": codigo, "descricao": descricao, "referencia": referencia,
-                "tipo": tipo, "valor": str(q(valor)), "esocial": esocial,
+                "tipo": tipo, "valor": str(q(valor)), "esocial": esocial, "beneficio": beneficio,
             })
 
     clt = trabalhador.tipo_contrato == TipoContrato.com_registro
@@ -165,57 +189,79 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
             referencia = f"{dias_uteis} d × {q(b.valor)}".replace(".", ",")
         if b.natureza == NaturezaBeneficio.provento:
             total_benef_prov += valor
-            item("004", rotulo, referencia, "provento", valor, rubrica_beneficio(b.tipo.value, False))
+            item("004", rotulo, referencia, "provento", valor, rubrica_beneficio(b.tipo.value, False), b.tipo.value)
         elif b.natureza == NaturezaBeneficio.desconto:
             total_benef_desc += valor
             item("104", b.descricao or f"Desconto {rotulo.lower()}", "", "desconto", valor,
-                 rubrica_beneficio(b.tipo.value, True))
+                 rubrica_beneficio(b.tipo.value, True), b.tipo.value)
         elif valor:
             descricao = f"{rotulo} ({dias_uteis} dias úteis)" if vt_por_dia(b) else rotulo
-            informativos.append({"descricao": descricao, "valor": str(q(valor))})
+            informativos.append({"descricao": descricao, "valor": str(q(valor)), "beneficio": b.tipo.value})
+
+    # Dias de férias no mês: já pagos antecipadamente no recibo de férias, saem do salário da folha
+    gozos_no_mes = ferias_no_mes(trabalhador, mes_ano)
+    dias_ferias = sum(dias for _, dias in gozos_no_mes)
+    desconto_ferias = min(q(salario_base / tabelas.DIAS_MES_COMERCIAL * dias_ferias), salario_proporcional)
+    item("106", "Férias (pagas no recibo de férias)", f"{dias_ferias} dias", "desconto", desconto_ferias)
 
     item("101", "Faltas", "", "desconto", total_faltas, "5060")
     item("105", "Atrasos", f"{_fmt(horas_atraso)} h", "desconto", total_atrasos, "5050")
     item("102", "Adiantamento salarial (vales)", f"{qtd_vales} lanç.", "desconto", total_vales, "5098")
     total_faltas += total_atrasos
 
-    # Base de cálculo dos encargos: remuneração (sem benefícios indenizatórios)
-    salario_bruto = max(q(salario_proporcional + total_he + total_bonus - total_faltas), ZERO)
+    # Base de cálculo dos encargos: remuneração (sem benefícios indenizatórios nem os dias de férias)
+    salario_bruto = max(q(salario_proporcional + total_he + total_bonus - total_faltas - desconto_ferias), ZERO)
 
     inss_empregado = ZERO
     tabela_inss = None
     if trabalhador.tipo_contrato == TipoContrato.com_registro:
+        # Férias entram na competência dos dias gozados: o INSS do mês é sobre salário + férias, menos o
+        # que já foi descontado no recibo de férias (proporcional aos dias deste mês)
+        base_ferias = inss_ferias = ZERO
+        for gozo, dias in gozos_no_mes:
+            if gozo.valor_ferias is not None:
+                base_ferias += gozo.bruto * dias / gozo.dias
+                inss_ferias += Decimal(gozo.inss) * dias / gozo.dias
+        base_ferias, inss_ferias = q(base_ferias), q(inss_ferias)
         faixas, tabela_inss = faixas_do_mes(db, mes_ano)
-        inss_empregado = inss_progressivo(salario_bruto, faixas)
+        inss_total = inss_progressivo(salario_bruto + base_ferias, faixas)
+        inss_empregado = max(inss_total - inss_ferias, ZERO)
         item("103", "INSS", f"tabela {tabela_inss}", "desconto", inss_empregado, "5180")
+        base = salario_bruto + base_ferias
+        sufixo = " (salário + férias)" if base_ferias else ""
         partes = {
-            "INSS do empregado (descontado no recibo)": inss_empregado,
-            f"INSS patronal ({_fmt(tabelas.ALIQ_INSS_PATRONAL * 100)}%)": q(salario_bruto * tabelas.ALIQ_INSS_PATRONAL),
-            f"GILRAT ({_fmt(tabelas.ALIQ_GILRAT * 100)}%)": q(salario_bruto * tabelas.ALIQ_GILRAT),
-            f"FGTS ({_fmt(tabelas.ALIQ_FGTS * 100)}%)": q(salario_bruto * tabelas.ALIQ_FGTS),
+            f"INSS do empregado (descontado nos recibos){sufixo}": inss_total,
+            f"INSS patronal ({_fmt(tabelas.ALIQ_INSS_PATRONAL * 100)}%)": q(base * tabelas.ALIQ_INSS_PATRONAL),
+            f"GILRAT ({_fmt(tabelas.ALIQ_GILRAT * 100)}%)": q(base * tabelas.ALIQ_GILRAT),
+            f"FGTS ({_fmt(tabelas.ALIQ_FGTS * 100)}%)": q(base * tabelas.ALIQ_FGTS),
             f"FGTS indenização compensatória ({_fmt(tabelas.ALIQ_FGTS_INDENIZATORIO * 100)}%)":
-                q(salario_bruto * tabelas.ALIQ_FGTS_INDENIZATORIO),
+                q(base * tabelas.ALIQ_FGTS_INDENIZATORIO),
         }
+        encargos_empregador = q(sum(partes.values(), ZERO) - inss_total)
         titulo_encargos = "Guia DAE eSocial (estimativa a recolher)"
     else:
-        provisao_ferias = q(salario_bruto / 12)
+        remuneracao = salario_bruto + desconto_ferias  # a reserva continua durante as férias
+        provisao_ferias = q(remuneracao / 12)
         partes = {
             "Provisão de férias (1/12)": provisao_ferias,
             "Provisão de 1/3 de férias": q(provisao_ferias / 3),
-            "Provisão de 13º salário (1/12)": q(salario_bruto / 12),
+            "Provisão de 13º salário (1/12)": q(remuneracao / 12),
         }
+        encargos_empregador = ZERO
         titulo_encargos = "Fundo de reserva (valor a guardar)"
 
     encargos = {k: str(v) for k, v in partes.items()}
     total_encargos = q(sum(partes.values(), ZERO))
 
     total_proventos = q(salario_proporcional + total_he + total_bonus + total_benef_prov)
-    total_descontos = q(total_faltas + total_vales + total_benef_desc + inss_empregado)
+    total_descontos = q(total_faltas + total_vales + total_benef_desc + inss_empregado + desconto_ferias)
     salario_liquido = q(total_proventos - total_descontos)
 
     return {
         "horas_mensais": horas_mensais,
         "dias_uteis": dias_uteis,
+        "dias_ferias": dias_ferias,
+        "desconto_ferias": desconto_ferias,
         "salario_base": q(salario_base),
         "salario_proporcional": salario_proporcional,
         "total_horas_extras": q(total_he),
@@ -234,6 +280,7 @@ def calcular(db: Session, trabalhador: Trabalhador, mes_ano: str, dias_trabalhad
             "itens": itens,
             "beneficios_informativos": informativos,
             "encargos": {"titulo": titulo_encargos, "itens": encargos, "total": str(total_encargos)},
+            "encargos_empregador": str(encargos_empregador),
             "valor_hora": str(q(valor_hora(salario_base, horas_mensais))),
             "tabela_inss": tabela_inss,
         },

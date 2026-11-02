@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { dataBR } from '../utils';
+import { brl, dataBR, hoje } from '../utils';
 
 export function Modal({ titulo, onClose, children, largo = false }) {
   useEffect(() => {
@@ -57,4 +57,24 @@ export function useTrabalhadores(apenasAtivos = true) {
     api.get(`/trabalhadores${apenasAtivos ? '?apenas_ativos=true' : ''}`).then(setLista).catch(() => {});
   }, [apenasAtivos]);
   return lista;
+}
+
+/** Data em que um pagamento (folha, férias, 13º) foi feito. */
+export function ModalPagamento({ descricao, valor, aviso, onClose, onConfirmar }) {
+  const [data, setData] = useState(hoje());
+  return (
+    <Modal titulo="Registrar pagamento" onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); onConfirmar(data); }}>
+        <p>{descricao}: <strong>{brl(valor)}</strong></p>
+        <Campo label="Pago em">
+          <input type="date" value={data} onChange={(e) => setData(e.target.value)} required autoFocus />
+        </Campo>
+        {aviso && <p className="dica">{aviso}</p>}
+        <div className="acoes direita">
+          <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn primario">Marcar como pago</button>
+        </div>
+      </form>
+    </Modal>
+  );
 }

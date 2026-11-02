@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { MODO_APP } from '../plataforma';
-import { Alerta, SituacaoFolha } from '../components/ui';
+import { Alerta, Campo, SituacaoFolha } from '../components/ui';
 import { brl, mesAtual, mesLongo, ROTULOS } from '../utils';
 
 /** O próximo passo do mês, na ordem da rotina: cadastrar → calcular → fechar. */
@@ -14,10 +14,108 @@ function proximoPasso(trabalhadores, porTrabalhador, mes) {
   return null;
 }
 
+/** O que deve estar guardado hoje para férias, 13º e encargos: provisões desde a admissão menos o já pago. */
+function Reservas({ resumo }) {
+  const ativos = resumo.trabalhadores.filter((t) => t.provisoes);
+  if (!ativos.length) return null;
+  const linha = (rotulo, p) => (
+    <div key={rotulo}>
+      <dt>{rotulo}</dt>
+      <dd>{brl(p.saldo)}</dd>
+      <dd className="detalhe">{brl(p.provisionado)} provisionado, {brl(p.pago)} pago</dd>
+    </div>
+  );
+  return (
+    <section className="secao">
+      <div className="titulo-pagina compacto">
+        <div>
+          <h3>Reservas para férias, 13º e encargos</h3>
+          <p className="sub">Quanto deveria estar guardado hoje: 1/12 da remuneração por mês para o 13º e 1/12 + 1/3 para as férias, menos o que já foi pago.</p>
+        </div>
+        <div className="reserva-total"><strong>{brl(resumo.totais.reservas)}</strong><small>total a manter guardado</small></div>
+      </div>
+      <div className="cartoes-resumo">
+        {ativos.map((t) => {
+          const p = t.provisoes;
+          return (
+            <article key={t.trabalhador_id} className="cartao-resumo">
+              <header><strong>{t.trabalhador_nome}</strong><small>{ROTULOS.tipo_contrato[t.tipo_contrato]}</small></header>
+              <dl className="linhas-resumo">
+                {linha('Férias + 1/3', p.ferias)}
+                {p.decimo_terceiro.map((d) => linha(`13º de ${d.ano}`, d))}
+                {p.encargos && linha('Encargos sobre férias e 13º', p.encargos)}
+              </dl>
+              <footer><span>Reserva</span><strong>{brl(p.saldo_total)}</strong></footer>
+              {p.meses_estimados > 0 && (
+                <small>{p.meses_estimados} {p.meses_estimados === 1 ? 'mês sem folha calculada entrou' : 'meses sem folha calculada entraram'} pelo salário do cadastro.</small>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Quanto cada ocorrência (folha, benefícios, férias, 13º, encargos) custou no ano, por colaborador. */
+function PagamentosDoAno({ resumo, ano, onAno }) {
+  const anoAtual = new Date().getFullYear();
+  const anos = Array.from({ length: 5 }, (_, i) => anoAtual - i);
+  return (
+    <section className="secao">
+      <div className="titulo-pagina compacto">
+        <div>
+          <h3>Pagamentos em {ano}</h3>
+          <p className="sub">
+            Total do ano <strong>{brl(resumo.totais.total)}</strong>
+            {resumo.totais.em_aberto > 0 && <>; {brl(resumo.totais.em_aberto)} ainda em aberto</>}.
+          </p>
+        </div>
+        <Campo label="Ano">
+          <select value={ano} onChange={(e) => onAno(Number(e.target.value))}>
+            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </Campo>
+      </div>
+      {resumo.trabalhadores.length === 0 ? <p className="vazio">Nenhum pagamento em {ano}.</p> : (
+        <div className="cartoes-resumo">
+          {resumo.trabalhadores.map((t) => (
+            <article key={t.trabalhador_id} className="cartao-resumo">
+              <header><strong>{t.trabalhador_nome}</strong><small>{ROTULOS.tipo_contrato[t.tipo_contrato]}{!t.ativo && ' · inativo'}</small></header>
+              <dl className="linhas-resumo">
+                {Object.entries(resumo.categorias).map(([chave, rotulo]) => {
+                  if (chave === 'encargos' && t.tipo_contrato !== 'com_registro' && !t.valores[chave]) return null;
+                  return (
+                    <div key={chave} className={t.valores[chave] ? '' : 'zerado'}>
+                      <dt>{rotulo}</dt><dd>{t.valores[chave] ? brl(t.valores[chave]) : '—'}</dd>
+                    </div>
+                  );
+                })}
+              </dl>
+              <footer><span>Total</span><strong>{brl(t.total)}</strong></footer>
+              {t.pendentes > 0 && <small>{t.pendentes} {t.pendentes === 1 ? 'pagamento' : 'pagamentos'} em aberto: {brl(t.em_aberto)} líquidos.</small>}
+            </article>
+          ))}
+        </div>
+      )}
+      <p className="dica">
+        Folhas entram pela competência; férias e 13º, pela data de pagamento. Salários já sem os dias de férias, que
+        aparecem em Férias. Encargos: INSS patronal, GILRAT e FGTS estimados da guia DAE (sem o INSS descontado do empregado).
+      </p>
+    </section>
+  );
+}
+
 export default function Dashboard() {
   const mes = mesAtual();
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState('');
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [resumo, setResumo] = useState(null);
+
+  useEffect(() => {
+    api.get(`/resumo?ano=${ano}`).then(setResumo).catch((e) => setErro(e.message));
+  }, [ano]);
 
   useEffect(() => {
     Promise.all([
@@ -92,6 +190,9 @@ export default function Dashboard() {
           </ul>
         </section>
       )}
+
+      {resumo && <Reservas resumo={resumo} />}
+      {resumo && <PagamentosDoAno resumo={resumo} ano={ano} onAno={setAno} />}
 
       <section className="secao">
         <h3>Férias</h3>

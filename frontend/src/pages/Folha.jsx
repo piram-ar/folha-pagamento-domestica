@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { abrirPdf, api, baixarArquivo } from '../api';
 import { MODO_APP } from '../plataforma';
 import { useAuth } from '../AuthContext';
-import { Alerta, Badge, Campo, Modal, SituacaoFolha, useTrabalhadores } from '../components/ui';
-import { brl, diasDoMes, hoje, mesAtual, mesExtenso, mesLongo, ROTULOS } from '../utils';
+import { Alerta, Badge, Campo, Modal, ModalPagamento, SituacaoFolha, useTrabalhadores } from '../components/ui';
+import { brl, dataBR, diasDoMes, mesAtual, mesExtenso, mesLongo, ROTULOS } from '../utils';
 
 function DetalheFolha({ folha, onClose, onPdf, onExcluir, onReabrir, onPagar, onDesfazerPagamento }) {
   const d = folha.detalhamento || { itens: [], encargos: { itens: {} } };
@@ -56,48 +56,52 @@ function DetalheFolha({ folha, onClose, onPdf, onExcluir, onReabrir, onPagar, on
   );
 }
 
-/** Data do pagamento do líquido; marcar como paga também fecha a folha. */
-function PagarFolha({ folha, onClose, onConfirmar }) {
-  const [data, setData] = useState(hoje());
-  return (
-    <Modal titulo="Registrar pagamento" onClose={onClose}>
-      <form onSubmit={(e) => { e.preventDefault(); onConfirmar(data); }}>
-        <p>
-          {folha.trabalhador_nome}, {mesExtenso(folha.mes_ano).toLowerCase()}: <strong>{brl(folha.salario_liquido)}</strong>
-        </p>
-        <Campo label="Pago em">
-          <input type="date" value={data} onChange={(e) => setData(e.target.value)} required autoFocus />
-        </Campo>
-        {folha.status !== 'fechada' && <p className="dica">A folha ainda está em rascunho e será fechada junto.</p>}
-        <div className="acoes direita">
-          <button type="button" className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn primario">Marcar como paga</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 const SITUACOES = [['', 'Todas'], ['aberto', 'Em aberto'], ['paga', 'Pagas']];
 
-/** Todas as folhas já calculadas, de todos os meses, com a situação do pagamento. */
-function FolhasRegistradas({ folhas, ocupado, onAbrirMes, onPagar, onDetalhe }) {
+const TIPOS = [['', 'Todos'], ['folha', 'Folha mensal'], ['ferias', 'Férias'], ['decimo', '13º salário']];
+const ROTULO_TIPO = Object.fromEntries(TIPOS);
+
+const nomeParcela = (d) => (d.parcela === 1 ? '1ª parcela' : d.adiantamento > 0 ? '2ª parcela' : 'Parcela única');
+
+/** Folhas, férias e 13º num formato só, do pagamento mais recente para o mais antigo. */
+function unificar(folhas, ferias, decimos) {
+  return [
+    ...folhas.map((f) => ({
+      chave: `f${f.id}`, tipo: 'folha', data: `${f.mes_ano}-01`, referencia: mesExtenso(f.mes_ano),
+      trabalhador_id: f.trabalhador_id, trabalhador_nome: f.trabalhador_nome, liquido: f.salario_liquido,
+      pago_em: f.pago_em, rascunho: f.status !== 'fechada', original: f,
+    })),
+    ...ferias.map((g) => ({
+      chave: `g${g.id}`, tipo: 'ferias', data: g.data_pagamento, referencia: `${dataBR(g.data_inicio)} a ${dataBR(g.data_fim)}`,
+      trabalhador_id: g.trabalhador_id, trabalhador_nome: g.trabalhador_nome, liquido: g.liquido, pago_em: g.pago_em, original: g,
+    })),
+    ...decimos.map((d) => ({
+      chave: `d${d.id}`, tipo: 'decimo', data: d.data_pagamento, referencia: `${d.ano}, ${nomeParcela(d).toLowerCase()}`,
+      trabalhador_id: d.trabalhador_id, trabalhador_nome: d.trabalhador_nome, liquido: d.liquido, pago_em: d.pago_em, original: d,
+    })),
+  ].sort((a, b) => b.data.localeCompare(a.data) || a.trabalhador_nome.localeCompare(b.trabalhador_nome));
+}
+
+/** Tudo o que já foi calculado (folhas, férias e 13º), de todos os meses, com a situação do pagamento.
+ * Recibos de férias só são gerados na tela de Férias; aqui eles só podem ser vistos. */
+function PagamentosRegistrados({ registros, ocupado, onAbrirMes, onPagar, onDetalhe, onRecibo }) {
   const [trabalhador, setTrabalhador] = useState('');
   const [situacao, setSituacao] = useState('');
-  const nomes = [...new Map(folhas.map((f) => [f.trabalhador_id, f.trabalhador_nome])).entries()]
+  const [tipo, setTipo] = useState('');
+  const nomes = [...new Map(registros.map((r) => [r.trabalhador_id, r.trabalhador_nome])).entries()]
     .sort((a, b) => a[1].localeCompare(b[1]));
-  const visiveis = folhas.filter((f) => (!trabalhador || f.trabalhador_id === Number(trabalhador))
-    && (!situacao || (situacao === 'paga') === Boolean(f.pago_em)));
-  const emAberto = folhas.filter((f) => !f.pago_em);
+  const visiveis = registros.filter((r) => (!trabalhador || r.trabalhador_id === Number(trabalhador))
+    && (!situacao || (situacao === 'paga') === Boolean(r.pago_em)) && (!tipo || r.tipo === tipo));
+  const emAberto = registros.filter((r) => !r.pago_em);
 
   return (
     <section className="secao espaco-acima">
       <div className="titulo-pagina">
         <div>
-          <h3>Folhas registradas</h3>
+          <h3>Pagamentos registrados</h3>
           <p className="sub">
-            {emAberto.length === 0 ? 'Nenhuma folha em aberto.'
-              : `${emAberto.length} em aberto, somando ${brl(emAberto.reduce((s, f) => s + Number(f.salario_liquido), 0))} líquidos.`}
+            {emAberto.length === 0 ? 'Nenhum pagamento em aberto.'
+              : `${emAberto.length} em aberto, somando ${brl(emAberto.reduce((s, r) => s + Number(r.liquido), 0))} líquidos.`}
           </p>
         </div>
         <div className="acoes">
@@ -105,6 +109,11 @@ function FolhasRegistradas({ folhas, ocupado, onAbrirMes, onPagar, onDetalhe }) 
             <select value={trabalhador} onChange={(e) => setTrabalhador(e.target.value)}>
               <option value="">Todos</option>
               {nomes.map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
+            </select>
+          </Campo>
+          <Campo label="Tipo">
+            <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+              {TIPOS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </Campo>
           <Campo label="Situação">
@@ -117,22 +126,31 @@ function FolhasRegistradas({ folhas, ocupado, onAbrirMes, onPagar, onDetalhe }) 
       <div className="tabela-container">
         <table className="tabela-pilha">
           <thead>
-            <tr><th>Competência</th><th>Trabalhador</th><th className="num">Líquido</th><th>Situação</th><th><span className="oculto">Ações</span></th></tr>
+            <tr><th>Referência</th><th>Tipo</th><th>Trabalhador</th><th className="num">Líquido</th><th>Situação</th><th><span className="oculto">Ações</span></th></tr>
           </thead>
           <tbody>
-            {visiveis.length === 0 && <tr><td colSpan={5} className="vazio">Nenhuma folha encontrada.</td></tr>}
-            {visiveis.map((f) => (
-              <tr key={f.id}>
-                <td className="principal"><button className="btn-link" onClick={() => onAbrirMes(f.mes_ano)}>{mesExtenso(f.mes_ano)}</button></td>
-                <td data-label="Trabalhador">{f.trabalhador_nome}</td>
-                <td className="num" data-label="Líquido">{brl(f.salario_liquido)}</td>
+            {visiveis.length === 0 && <tr><td colSpan={6} className="vazio">Nenhum pagamento encontrado.</td></tr>}
+            {visiveis.map((r) => (
+              <tr key={r.chave}>
+                <td className="principal">
+                  {r.tipo === 'folha'
+                    ? <button className="btn-link" onClick={() => onAbrirMes(r.original.mes_ano)}>{r.referencia}</button>
+                    : <strong>{r.referencia}</strong>}
+                </td>
+                <td data-label="Tipo">{ROTULO_TIPO[r.tipo]}</td>
+                <td data-label="Trabalhador">{r.trabalhador_nome}</td>
+                <td className="num" data-label="Líquido">{brl(r.liquido)}</td>
                 <td data-label="Situação">
-                  {f.pago_em ? <SituacaoFolha folha={f} />
-                    : <Badge tipo="vermelho">{f.status === 'fechada' ? 'Em aberto' : 'Em aberto (rascunho)'}</Badge>}
+                  {r.pago_em ? <Badge tipo="verde">Paga em {dataBR(r.pago_em)}</Badge>
+                    : <Badge tipo="vermelho">{r.rascunho ? 'Em aberto (rascunho)' : 'Em aberto'}</Badge>}
                 </td>
                 <td className="acoes-linha">
-                  {!f.pago_em && <button className="btn pequeno sucesso" disabled={ocupado} onClick={() => onPagar(f)}>Marcar paga</button>}
-                  <button className="btn pequeno" onClick={() => onDetalhe(f)}>Detalhes</button>
+                  {r.tipo !== 'ferias' && !r.pago_em && (
+                    <button className="btn pequeno sucesso" disabled={ocupado} onClick={() => onPagar(r)}>Marcar paga</button>
+                  )}
+                  {r.tipo === 'folha'
+                    ? <button className="btn pequeno" onClick={() => onDetalhe(r.original)}>Detalhes</button>
+                    : <button className="btn pequeno" onClick={() => onRecibo(r)}>Ver recibo</button>}
                 </td>
               </tr>
             ))}
@@ -143,12 +161,145 @@ function FolhasRegistradas({ folhas, ocupado, onAbrirMes, onPagar, onDetalhe }) 
   );
 }
 
+/** Gera (ou recalcula) uma parcela do 13º com a data do pagamento. */
+function GerarParcela({ linha, parcela, existente, ano, onClose, onConfirmar }) {
+  const [data, setData] = useState(existente?.data_pagamento || (parcela === 1 ? `${ano}-11-30` : `${ano}-12-20`));
+  const unica = parcela === 2 && !linha.parcelas.some((d) => d.parcela === 1);
+  return (
+    <Modal titulo={`13º de ${linha.trabalhador_nome}: ${parcela === 1 ? '1ª parcela' : unica ? 'parcela única' : '2ª parcela'}`} onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); onConfirmar(data); }}>
+        <p className="dica">
+          {parcela === 1
+            ? 'Metade do 13º, sem desconto de INSS. Prazo: entre fevereiro e 30 de novembro.'
+            : `13º integral (${linha.avos}/12 avos)${unica ? '' : ' menos a 1ª parcela'}${linha.tipo_contrato === 'com_registro' ? ' e o INSS' : ''}. Prazo: 20 de dezembro${unica ? ' (parcela única: até 30 de novembro)' : ''}.`}
+        </p>
+        <Campo label="Data do pagamento">
+          <input type="date" value={data} onChange={(e) => setData(e.target.value)} required autoFocus />
+        </Campo>
+        <div className="acoes direita">
+          <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn primario">{existente ? 'Recalcular' : 'Gerar parcela'}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Parcelas do 13º salário do ano: geradas aqui, abatidas da provisão anual do 13º na tela Início. */
+function DecimoTerceiro({ versao, onAlterado, onMsg }) {
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [linhas, setLinhas] = useState([]);
+  const [gerando, setGerando] = useState(null);
+  const [pagando, setPagando] = useState(null);
+
+  useEffect(() => {
+    api.get(`/decimo-terceiro/previa?ano=${ano}`).then(setLinhas).catch((e) => onMsg({ erro: e.message }));
+  }, [ano, versao, onMsg]);
+
+  const executar = async (acao, sucesso) => {
+    onMsg({});
+    try {
+      await acao();
+      onMsg({ sucesso });
+      onAlterado();
+    } catch (e) { onMsg({ erro: e.message }); }
+  };
+  const gerar = (linha, parcela, data) => executar(async () => {
+    await api.post('/decimo-terceiro', { trabalhador_id: linha.trabalhador_id, ano, parcela, data_pagamento: data });
+    setGerando(null);
+  }, `13º de ${linha.trabalhador_nome} calculado. O recibo já pode ser gerado.`);
+  const pagar = (d, data) => executar(async () => {
+    await api.post(`/decimo-terceiro/${d.id}/pagar`, { pago_em: data });
+    setPagando(null);
+  }, `${nomeParcela(d)} do 13º de ${d.trabalhador_nome} marcada como paga.`);
+  const desfazer = (d) => {
+    if (!window.confirm(`Desfazer o pagamento da ${nomeParcela(d).toLowerCase()} do 13º de ${d.trabalhador_nome}?`)) return;
+    executar(() => api.del(`/decimo-terceiro/${d.id}/pagamento`), 'Pagamento desfeito.');
+  };
+  const excluir = (d) => {
+    if (!window.confirm(`Excluir a ${nomeParcela(d).toLowerCase()} do 13º de ${d.trabalhador_nome}?`)) return;
+    executar(() => api.del(`/decimo-terceiro/${d.id}`), 'Parcela excluída.');
+  };
+  const recibo = (d) => abrirPdf(`/decimo-terceiro/${d.id}/recibo.pdf`).catch((e) => onMsg({ erro: e.message }));
+
+  const celula = (linha, parcela) => {
+    const d = linha.parcelas.find((x) => x.parcela === parcela);
+    const temSegunda = linha.parcelas.some((x) => x.parcela === 2);
+    if (!d) {
+      if (parcela === 1 && temSegunda) return '—';
+      const rotulo = parcela === 1 ? 'Gerar 1ª parcela' : linha.parcelas.length ? 'Gerar 2ª parcela' : 'Gerar parcela única';
+      return <button className="btn pequeno" onClick={() => setGerando({ linha, parcela })}>{rotulo}</button>;
+    }
+    return (
+      <div className="parcela-13">
+        <span><strong>{brl(d.liquido)}</strong> <small>em {dataBR(d.data_pagamento)}</small></span>
+        {d.pago_em ? <Badge tipo="verde">Paga em {dataBR(d.pago_em)}</Badge> : <Badge tipo="vermelho">Em aberto</Badge>}
+        <span className="acoes-linha">
+          <button className="btn pequeno primario" onClick={() => recibo(d)}>{MODO_APP ? 'Enviar recibo' : 'Recibo'}</button>
+          {!d.pago_em && <button className="btn pequeno sucesso" onClick={() => setPagando(d)}>Marcar paga</button>}
+          {d.pago_em && <button className="btn pequeno" onClick={() => desfazer(d)}>Desfazer</button>}
+          {!d.pago_em && !(parcela === 1 && temSegunda) && (
+            <button className="btn pequeno" onClick={() => setGerando({ linha, parcela, existente: d })}>Recalcular</button>
+          )}
+          {!d.pago_em && !(parcela === 1 && temSegunda) && <button className="btn-link perigo" onClick={() => excluir(d)}>Excluir</button>}
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <section className="painel espaco-acima">
+      <div className="titulo-pagina compacto">
+        <div>
+          <h3>13º salário</h3>
+          <p className="sub">1ª parcela até 30/11 (metade, sem INSS); 2ª até 20/12, descontando a 1ª e o INSS.</p>
+        </div>
+        <Campo label="Ano">
+          <input type="number" min="2000" max="2100" value={ano} onChange={(e) => e.target.value && setAno(Number(e.target.value))} />
+        </Campo>
+      </div>
+      <div className="tabela-container">
+        <table className="tabela-pilha">
+          <thead>
+            <tr><th>Trabalhador</th><th>Avos</th><th className="num">13º previsto</th><th>1ª parcela</th><th>2ª parcela / única</th></tr>
+          </thead>
+          <tbody>
+            {linhas.length === 0 && <tr><td colSpan={5} className="vazio">Nenhum trabalhador ativo com meses trabalhados em {ano}.</td></tr>}
+            {linhas.map((l) => (
+              <tr key={l.trabalhador_id}>
+                <td className="principal"><span><strong>{l.trabalhador_nome}</strong><br /><small>{ROTULOS.tipo_contrato[l.tipo_contrato]}</small></span></td>
+                <td data-label="Avos">{l.avos}/12</td>
+                <td className="num" data-label="13º previsto">{brl(l.valor_integral)}</td>
+                <td data-label="1ª parcela">{celula(l, 1)}</td>
+                <td data-label="2ª parcela / única">{celula(l, 2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="dica">
+        O 13º previsto usa o salário de dezembro e a média mensal das horas extras do ano. Cada mês com 15 dias ou mais de
+        trabalho conta 1/12. Os valores pagos são descontados da reserva do 13º mostrada na tela Início.
+      </p>
+      {gerando && (
+        <GerarParcela {...gerando} ano={ano} onClose={() => setGerando(null)}
+          onConfirmar={(data) => gerar(gerando.linha, gerando.parcela, data)} />
+      )}
+      {pagando && (
+        <ModalPagamento descricao={`${nomeParcela(pagando)} do 13º de ${pagando.trabalhador_nome}`} valor={pagando.liquido}
+          onClose={() => setPagando(null)} onConfirmar={(data) => pagar(pagando, data)} />
+      )}
+    </section>
+  );
+}
+
 export default function Folha() {
   const { isAdmin } = useAuth();
   const trabalhadores = useTrabalhadores();
   const [mes, setMes] = useState(mesAtual());
   const [folhas, setFolhas] = useState([]);
-  const [todas, setTodas] = useState([]);
+  const [registros, setRegistros] = useState([]);
+  const [versao, setVersao] = useState(0);
   const [pagando, setPagando] = useState(null);
   const [dias, setDias] = useState({});
   const [uteis, setUteis] = useState({});
@@ -165,13 +316,15 @@ export default function Folha() {
 
   const carregar = useCallback(async () => {
     try {
-      const [lista, sugeridos, historico] = await Promise.all([
+      const [lista, sugeridos, historico, ferias, decimos] = await Promise.all([
         api.get(`/folha?mes_ano=${mes}`),
         api.get(`/folha/dias-uteis?mes_ano=${mes}`),
         api.get('/folha'),
+        api.get('/ferias/pagamentos'),
+        api.get('/decimo-terceiro'),
       ]);
       setFolhas(lista);
-      setTodas(historico);
+      setRegistros(unificar(historico, ferias, decimos));
       setDias(Object.fromEntries(lista.map((f) => [f.trabalhador_id, f.dias_trabalhados])));
       const porId = Object.fromEntries(sugeridos.map((s) => [s.trabalhador_id, s]));
       setSugestao(porId);
@@ -235,15 +388,20 @@ export default function Folha() {
     if (!window.confirm(`Excluir o rascunho da folha de ${f.trabalhador_nome}?`)) return;
     executar(() => api.del(`/folha/${f.id}`), 'Rascunho excluído.');
   };
-  const pagar = (f, data) => executar(async () => {
-    await api.post(`/folha/${f.id}/pagar`, { pago_em: data });
+  const pagar = (r, data) => executar(async () => {
+    await api.post(r.tipo === 'decimo' ? `/decimo-terceiro/${r.original.id}/pagar` : `/folha/${r.original.id}/pagar`, { pago_em: data });
     setPagando(null);
-  }, `Folha de ${f.trabalhador_nome} marcada como paga.`);
+    setVersao((v) => v + 1);
+  }, `Pagamento de ${r.trabalhador_nome} registrado.`);
   const desfazerPagamento = (f) => {
     if (!window.confirm(`Desfazer o pagamento da folha de ${f.trabalhador_nome}? Ela volta a ficar em aberto.`)) return;
     executar(() => api.del(`/folha/${f.id}/pagamento`), 'Pagamento desfeito: a folha voltou a ficar em aberto.');
   };
   const pdf = (f) => abrirPdf(`/folha/${f.id}/recibo.pdf`).catch((e) => setMsg({ erro: e.message }));
+  const reciboRegistro = (r) => abrirPdf(r.tipo === 'ferias' ? `/ferias/gozos/${r.original.id}/recibo.pdf`
+    : `/decimo-terceiro/${r.original.id}/recibo.pdf`).catch((e) => setMsg({ erro: e.message }));
+  // Um pagamento de folha passa pelo mesmo formato da lista geral
+  const pagarFolha = (f) => setPagando(unificar([f], [], [])[0]);
 
   const total = (campo) => folhas.reduce((s, f) => s + Number(f[campo]), 0);
   const comRegistro = folhas.filter((f) => f.tipo_contrato === 'com_registro');
@@ -356,15 +514,26 @@ export default function Folha() {
         </section>
       )}
 
-      <FolhasRegistradas
-        folhas={todas}
+      <DecimoTerceiro versao={versao} onAlterado={() => { setVersao((v) => v + 1); carregar(); }} onMsg={setMsg} />
+
+      <PagamentosRegistrados
+        registros={registros}
         ocupado={ocupado}
         onAbrirMes={(m) => { setMes(m); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
         onPagar={setPagando}
         onDetalhe={setDetalhe}
+        onRecibo={reciboRegistro}
       />
 
-      {pagando && <PagarFolha folha={pagando} onClose={() => setPagando(null)} onConfirmar={(data) => pagar(pagando, data)} />}
+      {pagando && (
+        <ModalPagamento
+          descricao={`${pagando.trabalhador_nome}, ${ROTULO_TIPO[pagando.tipo].toLowerCase()} (${pagando.referencia.toLowerCase()})`}
+          valor={pagando.liquido}
+          aviso={pagando.rascunho ? 'A folha ainda está em rascunho e será fechada junto.' : null}
+          onClose={() => setPagando(null)}
+          onConfirmar={(data) => pagar(pagando, data)}
+        />
+      )}
 
       {detalhe && (
         <DetalheFolha
@@ -373,7 +542,7 @@ export default function Folha() {
           onPdf={() => pdf(detalhe)}
           onExcluir={() => { setDetalhe(null); excluir(detalhe); }}
           onReabrir={isAdmin ? () => { setDetalhe(null); reabrir(detalhe); } : null}
-          onPagar={() => { setDetalhe(null); setPagando(detalhe); }}
+          onPagar={() => { setDetalhe(null); pagarFolha(detalhe); }}
           onDesfazerPagamento={() => { setDetalhe(null); desfazerPagamento(detalhe); }}
         />
       )}
