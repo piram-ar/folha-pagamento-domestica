@@ -161,8 +161,10 @@ ficam protegidos.
   devidos (estimativa da DAE).
 - **Sem vínculo:** recibo simples de prestação de serviços domésticos ("Eu, ..., CPF ..., declaro que recebi
   de ... a importância de R$ ... (valor por extenso)..."), com as duas vias na mesma folha A4.
-- **Férias e 13º:** recibo próprio (duas vias), com o período aquisitivo e de gozo ou os avos do 13º, a
-  discriminação (férias, média, 1/3, INSS / 13º, adiantamento, INSS) e o líquido por extenso.
+- **Férias e 13º:** com vínculo, recibo no formato do holerite (duas vias), com o período aquisitivo e de
+  gozo ou os avos do 13º, a discriminação (férias, média, 1/3, abono, INSS / 13º, adiantamento, INSS) e o
+  líquido por extenso. Sem vínculo, o mesmo recibo simples da folha mensal ("declaro que recebi ... referente
+  às férias ..." / "ao 13º salário ..."), com a discriminação e as duas vias na mesma folha A4.
 
 **eSocial:** o módulo do empregador doméstico não aceita importação de arquivos. Na tela da folha, a
 **Guia de lançamento** (PDF ou CSV) lista, por empregado, as rubricas e os valores a digitar em
