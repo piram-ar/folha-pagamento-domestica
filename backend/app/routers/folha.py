@@ -3,12 +3,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, defer, joinedload, selectinload
 
 from ..database import get_db
 from ..deps import exigir_admin, usuario_atual
 from ..models import FolhaPagamento, StatusFolha, TipoContrato, Trabalhador
-from ..schemas import CalcularFolhaIn, DiasUteisOut, FolhaOut, MesAno, PagamentoFolhaIn
+from ..schemas import CalcularFolhaIn, DiasUteisOut, FolhaOut, FolhaResumoOut, MesAno, PagamentoFolhaIn
 from ..services.calculo_folha import beneficio_vigente, gerar_ou_atualizar, vt_por_dia
 from ..services.calendario import dias_no_mes, dias_uteis
 from ..services.salario import inicio_do_mes
@@ -35,16 +35,29 @@ def _obter(db: Session, folha_id: int) -> FolhaPagamento:
     return folha
 
 
-@router.get("", response_model=list[FolhaOut])
-def listar(mes_ano: str | None = None, trabalhador_id: int | None = None, db: Session = Depends(get_db)):
+def _saida_resumida(folha: FolhaPagamento) -> FolhaResumoOut:
+    return FolhaResumoOut(
+        id=folha.id, trabalhador_id=folha.trabalhador_id, trabalhador_nome=folha.trabalhador.nome,
+        tipo_contrato=folha.trabalhador.tipo_contrato, mes_ano=folha.mes_ano, dias_trabalhados=folha.dias_trabalhados,
+        dias_uteis=folha.dias_uteis, encargos_recolher_guardar=folha.encargos_recolher_guardar,
+        salario_liquido=folha.salario_liquido, status=folha.status, pago_em=folha.pago_em,
+    )
+
+
+@router.get("", response_model=list[FolhaResumoOut] | list[FolhaOut])
+def listar(mes_ano: str | None = None, trabalhador_id: int | None = None, resumida: bool = False,
+           db: Session = Depends(get_db)):
+    """Com `resumida`, só o que as listagens usam, sem ler o detalhamento (o que pesa no histórico)."""
     consulta = select(FolhaPagamento).join(Trabalhador).options(joinedload(FolhaPagamento.trabalhador)).order_by(
         FolhaPagamento.mes_ano.desc(), Trabalhador.nome
     )
+    if resumida:
+        consulta = consulta.options(defer(FolhaPagamento.detalhamento))
     if mes_ano:
         consulta = consulta.where(FolhaPagamento.mes_ano == mes_ano)
     if trabalhador_id:
         consulta = consulta.where(FolhaPagamento.trabalhador_id == trabalhador_id)
-    return [_saida(f) for f in db.scalars(consulta).all()]
+    return [(_saida_resumida if resumida else _saida)(f) for f in db.scalars(consulta).all()]
 
 
 @router.post("/calcular", response_model=FolhaOut)

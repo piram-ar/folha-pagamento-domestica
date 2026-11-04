@@ -12,6 +12,28 @@ export const cpfFmt = (cpf = '') => {
   return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : cpf;
 };
 
+/** CPF com pontuação enquanto se digita. */
+export const cpfMascara = (valor) => {
+  const d = valor.replace(/\D/g, '').slice(0, 11);
+  return d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1-$2');
+};
+
+export const cepMascara = (valor) => {
+  const d = valor.replace(/\D/g, '').slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+};
+
+/** Texto digitado à brasileira para o formato da API: "1.234,56" -> "1234.56". Ponto sem vírgula é decimal,
+ * salvo quando separa milhares ("1.500"). */
+export const numero = (valor) => {
+  const s = String(valor).trim();
+  if (s.includes(',')) return s.replace(/\./g, '').replace(',', '.');
+  return /^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s;
+};
+
+/** Valor da API para o campo de texto: 2000.00 -> "2000,00". */
+export const valorCampo = (v) => (v === '' || v == null ? '' : Number(v).toFixed(2).replace('.', ','));
+
 export const hoje = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -19,6 +41,13 @@ export const hoje = () => {
 
 export const mesAtual = () => {
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+/** Mês vizinho: somarMeses('2026-12', 1) -> '2027-01'. */
+export const somarMeses = (mesAno, n) => {
+  const [a, m] = mesAno.split('-').map(Number);
+  const d = new Date(a, m - 1 + n, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 

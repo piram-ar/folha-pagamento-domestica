@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { api } from '../api';
-import { brl, mesAtual } from '../utils';
-import { Campo } from './ui';
+import { brl, mesAtual, numero } from '../utils';
+import { useConfirmar } from './feedback';
+import { Campo, Grupo, InputValor, SeletorMes } from './ui';
 
 const TIPOS = { percentual: 'Percentual (%)', valor: 'Acréscimo em R$', novo_salario: 'Novo salário (R$)' };
 const mesBR = (iso) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
@@ -27,6 +28,7 @@ function descricaoReajuste(r) {
 
 /** Histórico de aumentos e formulário para registrar um novo (percentual, acréscimo ou novo valor). */
 export default function Reajustes({ trabalhador, onAtualizar, setMsg }) {
+  const confirmar = useConfirmar();
   const reajustes = trabalhador.reajustes || [];
   const ultimo = reajustes[reajustes.length - 1];
   const minimo = ultimo ? proximoMes(ultimo.vigencia.slice(0, 7)) : trabalhador.data_admissao.slice(0, 7);
@@ -36,7 +38,7 @@ export default function Reajustes({ trabalhador, onAtualizar, setMsg }) {
 
   // Como o reajuste só entra no fim do histórico, a base é o último salário registrado
   const anterior = Number(ultimo ? ultimo.salario_novo : trabalhador.salario_base);
-  const valor = Number(String(form.valor).replace(',', '.')) || 0;
+  const valor = Number(numero(form.valor)) || 0;
   const previsto = novoSalario(anterior, form.tipo, valor);
   const futuro = reajustes.filter((r) => r.vigencia.slice(0, 7) > mesAtual());
 
@@ -46,7 +48,7 @@ export default function Reajustes({ trabalhador, onAtualizar, setMsg }) {
     setSalvando(true);
     try {
       const r = await api.post(`/trabalhadores/${trabalhador.id}/reajustes`, {
-        vigencia: form.vigencia, tipo: form.tipo, valor: String(form.valor).replace(',', '.'), motivo: form.motivo || null,
+        vigencia: form.vigencia, tipo: form.tipo, valor: numero(form.valor), motivo: form.motivo || null,
       });
       setMsg({ sucesso: `Reajuste registrado: ${brl(r.salario_anterior)} → ${brl(r.salario_novo)} a partir de ${mesBR(r.vigencia)}.` });
       setForm({ ...form, valor: '', motivo: '' });
@@ -55,7 +57,7 @@ export default function Reajustes({ trabalhador, onAtualizar, setMsg }) {
   };
 
   const excluir = async (r) => {
-    if (!window.confirm(`Excluir o reajuste de ${mesBR(r.vigencia)}? O salário volta a ${brl(r.salario_anterior)}.`)) return;
+    if (!await confirmar({ titulo: `Excluir o reajuste de ${mesBR(r.vigencia)}?`, texto: `O salário volta a ${brl(r.salario_anterior)}.`, acao: 'Excluir reajuste', perigo: true })) return;
     try {
       await api.del(`/trabalhadores/${trabalhador.id}/reajustes/${r.id}`);
       setMsg({ sucesso: 'Reajuste excluído.' });
@@ -103,16 +105,16 @@ export default function Reajustes({ trabalhador, onAtualizar, setMsg }) {
       <h4>Registrar reajuste</h4>
       <form onSubmit={registrar}>
         <div className="grade-form">
-          <Campo label="Vale a partir de" dica={ultimo ? `Depois de ${mesBR(ultimo.vigencia)} (último reajuste).` : ''}>
-            <input type="month" min={minimo} value={form.vigencia} onChange={(e) => setForm({ ...form, vigencia: e.target.value })} required />
-          </Campo>
+          <Grupo label="Vale a partir de" dica={ultimo ? `Depois de ${mesBR(ultimo.vigencia)} (último reajuste).` : ''}>
+            <SeletorMes mes={form.vigencia} onChange={(vigencia) => setForm({ ...form, vigencia })} />
+          </Grupo>
           <Campo label="Tipo de reajuste">
             <select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
               {Object.entries(TIPOS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </Campo>
           <Campo label={form.tipo === 'percentual' ? 'Percentual (%)' : 'Valor (R$)'}>
-            <input type="number" min="0.01" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} required />
+            <InputValor value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} required />
           </Campo>
           <Campo label="Motivo (opcional)">
             <input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Ex.: reajuste anual, salário mínimo" maxLength={160} />

@@ -15,7 +15,7 @@ folha-domestica/
 │   └── app/
 │       ├── models.py         # modelos SQLAlchemy (tabelas)
 │       ├── schemas.py        # validação Pydantic (CPF, mês, valores)
-│       ├── routers/          # auth, usuarios, trabalhadores, eventos, folha, ferias, inss, notificacoes
+│       ├── routers/          # auth, usuarios, objetos_contrato, trabalhadores, eventos, folha, ferias, inss, notificacoes
 │       └── services/
 │           ├── calculo_folha.py  # motor de cálculo
 │           ├── tabelas.py        # alíquotas de FGTS/encargos e tabela INSS de reserva
@@ -123,6 +123,7 @@ cd frontend && npm install && npm run dev                                    # h
 | Falta | por dias (`salário ÷ dias do mês × dias`) ou por horas (`valor-hora × horas`) |
 | Vales/adiantamentos | somados no mês e descontados no fechamento |
 | Vale-transporte | cadastrado **por dia** e multiplicado pelos dias úteis do mês: dias da semana trabalhados (configurados no cadastro do trabalhador) sem os feriados nacionais. O número é sugerido na tela da folha e pode ser ajustado (feriado local, falta, folga). A cota do empregado (até 6%) continua sendo um desconto mensal fixo |
+| Objeto do contrato | escolhido no cadastro do trabalhador, sai em todos os recibos |
 | Benefícios fixos | cada um configurado como *soma ao salário*, *desconta do salário* (ex.: cota de 6% do VT) ou *pago à parte* (só informativo no recibo), com **início da vigência**: entra nas folhas a partir do mês dessa data, o que permite gerar folhas e recibos de meses passados só com os benefícios da época |
 | **Com registro** | INSS do empregado (tabela progressiva) descontado no recibo. Encargos = estimativa da guia DAE: INSS do empregado + 8% patronal + 0,8% GILRAT + 8% FGTS + 3,2% FGTS compensatório |
 | **Sem registro** | Sem descontos legais. "Fundo de reserva" = 1/12 férias + 1/3 de férias + 1/12 13º (≈ 19,44% da remuneração) |
@@ -132,10 +133,10 @@ cd frontend && npm install && npm run dev                                    # h
 | Provisões (reservas) | por mês trabalhado: 1/12 da remuneração para o 13º e 1/12 + 1/3 para as férias; com registro, mais os encargos do empregador (20%) sobre esses valores. Saldo = provisionado desde a admissão − férias e 13º já pagos. Meses sem folha calculada entram pelo salário do cadastro |
 
 Folha **fechada** congela os valores e bloqueia lançamentos do mês; apenas admins podem reabri-la.
-Ao pagar, marque a folha como **paga** (com a data); a lista "Pagamentos registrados", no fim da tela da folha,
+Ao pagar, marque a folha como **paga** (com a data); a aba **Pagamentos** da tela da folha
 mostra folhas, férias e parcelas do 13º com a situação (paga/em aberto) e o total líquido ainda em aberto.
 Os recibos de férias são gerados só na tela **Férias** (na lista da folha eles podem ser vistos); as parcelas
-do 13º são geradas e pagas na própria tela da folha.
+do 13º são geradas e pagas na aba **13º salário** da tela da folha.
 
 A tela **Início** mostra, por colaborador, os pagamentos do ano (salários, vale-transporte, vale-alimentação,
 outros benefícios, férias, 13º e encargos) e o saldo das reservas que o contratante deve manter guardado.
@@ -159,8 +160,11 @@ ficam protegidos.
   rubricas com o código do eSocial (ex.: `eSocial1000` Salário, `eSocial5180` INSS), bases de cálculo
   (INSS, FGTS, IRRF) e data preenchida pelo empregado. A via do empregador traz o demonstrativo dos valores
   devidos (estimativa da DAE).
-- **Sem vínculo:** recibo simples de prestação de serviços domésticos ("Eu, ..., CPF ..., declaro que recebi
+- **Sem vínculo:** recibo simples de prestação de serviços ("Eu, ..., CPF ..., declaro que recebi
   de ... a importância de R$ ... (valor por extenso)..."), com as duas vias na mesma folha A4.
+- **Objeto do contrato:** todos os recibos, com e sem vínculo, trazem o objeto escolhido no cadastro do
+  trabalhador (Serviços Domésticos, de Babá, de Diarista...). A lista fica na tela **Objetos do contrato**;
+  objeto em uso não pode ser excluído, só desativado. O recibo usa o cadastro atual, inclusive ao reimprimir.
 - **Férias e 13º:** com vínculo, recibo no formato do holerite (duas vias), com o período aquisitivo e de
   gozo ou os avos do 13º, a discriminação (férias, média, 1/3, abono, INSS / 13º, adiantamento, INSS) e o
   líquido por extenso. Sem vínculo, o mesmo recibo simples da folha mensal ("declaro que recebi ... referente

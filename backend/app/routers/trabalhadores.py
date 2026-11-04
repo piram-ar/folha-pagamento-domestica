@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..deps import usuario_atual
-from ..models import BeneficioFixo, FolhaPagamento, ReajusteSalarial, StatusFolha, Trabalhador
+from ..models import BeneficioFixo, FolhaPagamento, ObjetoContrato, ReajusteSalarial, StatusFolha, Trabalhador
 from ..schemas import (
     BeneficioIn,
     BeneficioOut,
@@ -35,6 +35,13 @@ def _cpf_em_uso(db: Session, cpf: str, ignorar_id: int | None = None) -> bool:
     return db.scalar(consulta) is not None
 
 
+def _validar_objeto(db: Session, objeto_id: int, atual_id: int | None = None) -> None:
+    """Objeto desativado sai da lista de escolha, mas quem já o usa pode continuar com ele."""
+    objeto = db.get(ObjetoContrato, objeto_id)
+    if objeto is None or (not objeto.ativo and objeto_id != atual_id):
+        raise HTTPException(status_code=422, detail="Selecione um objeto do contrato ativo")
+
+
 @router.get("", response_model=list[TrabalhadorOut])
 def listar(apenas_ativos: bool = False, db: Session = Depends(get_db)):
     consulta = select(Trabalhador).order_by(Trabalhador.nome)
@@ -47,6 +54,7 @@ def listar(apenas_ativos: bool = False, db: Session = Depends(get_db)):
 def criar(dados: TrabalhadorCreate, db: Session = Depends(get_db)):
     if _cpf_em_uso(db, dados.cpf):
         raise HTTPException(status_code=409, detail="CPF já cadastrado")
+    _validar_objeto(db, dados.objeto_contrato_id)
     trabalhador = Trabalhador(**dados.model_dump())
     db.add(trabalhador)
     db.commit()
@@ -72,6 +80,10 @@ def atualizar(trabalhador_id: int, dados: TrabalhadorUpdate, db: Session = Depen
     campos = dados.model_dump(exclude_unset=True)
     if "cpf" in campos and _cpf_em_uso(db, campos["cpf"], trabalhador.id):
         raise HTTPException(status_code=409, detail="CPF já cadastrado")
+    if campos.get("objeto_contrato_id") is None:
+        campos.pop("objeto_contrato_id", None)
+    else:
+        _validar_objeto(db, campos["objeto_contrato_id"], trabalhador.objeto_contrato_id)
     novo_salario = campos.get("salario_base")
     if trabalhador.reajustes and novo_salario is not None and novo_salario != trabalhador.salario_base:
         raise HTTPException(

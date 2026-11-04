@@ -12,7 +12,7 @@ function mensagemErro(detail, status) {
   // Erros de validação do FastAPI/Pydantic
   if (Array.isArray(detail)) {
     return detail
-      .map((d) => `${(d.loc || []).filter((p) => p !== 'body').join('.')}: ${d.msg}`)
+      .map((d) => d.msg.replace(/^Value error, /, ''))
       .join('; ');
   }
   return JSON.stringify(detail);

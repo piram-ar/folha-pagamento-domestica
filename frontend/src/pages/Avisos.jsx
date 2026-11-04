@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, baixarArquivo } from '../api';
 import { useAuth } from '../AuthContext';
-import { Alerta, Badge, Campo } from '../components/ui';
+import { useAvisar, useConfirmar } from '../components/feedback';
+import { Alerta, Carregando, Badge, Campo } from '../components/ui';
 import { dataBR, diaSemana, ROTULOS } from '../utils';
 
 const APK_URL = 'https://github.com/piram-ar/folha-pagamento-domestica/releases/latest/download/folha-domestica.apk';
@@ -17,7 +18,7 @@ const PROVEDORES = {
 function ProximosPagamentos() {
   const [lista, setLista] = useState(null);
   useEffect(() => { api.get('/notificacoes/proximos?dias=45').then(setLista).catch(() => setLista([])); }, []);
-  if (!lista) return <div className="carregando">Carregando…</div>;
+  if (!lista) return <Carregando />;
   if (!lista.length) return <p className="vazio">Nenhum pagamento nos próximos 45 dias (cadastre trabalhadores ativos).</p>;
   return (
     <ul className="proximos">
@@ -39,7 +40,9 @@ export default function Avisos() {
   const { isAdmin } = useAuth();
   const [config, setConfig] = useState(null);
   const [form, setForm] = useState(null);
-  const [msg, setMsg] = useState({});
+  const [erro, setErro] = useState('');
+  const avisar = useAvisar();
+  const confirmar = useConfirmar();
   const [ocupado, setOcupado] = useState(false);
 
   const aplicar = useCallback((c) => {
@@ -47,33 +50,32 @@ export default function Avisos() {
     setForm({ ...c, destinatarios: c.destinatarios || '', smtp_host: c.smtp_host || '', smtp_usuario: c.smtp_usuario || '',
       smtp_remetente: c.smtp_remetente || '', smtp_senha: '' });
   }, []);
-  useEffect(() => { api.get('/notificacoes/config').then(aplicar).catch((e) => setMsg({ erro: e.message })); }, [aplicar]);
+  useEffect(() => { api.get('/notificacoes/config').then(aplicar).catch((e) => setErro(e.message)); }, [aplicar]);
 
-  if (!form) return msg.erro ? <Alerta erro={msg.erro} /> : <div className="carregando">Carregando…</div>;
+  if (!form) return erro ? <Alerta erro={erro} /> : <Carregando />;
 
   const set = (campo) => (e) => setForm({ ...form, [campo]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const linkAssinatura = config.token_calendario
     ? `${window.location.origin}/api/notificacoes/assinatura/${config.token_calendario}.ics` : null;
 
   const executar = async (acao) => {
-    setMsg({});
     setOcupado(true);
-    try { await acao(); } catch (e) { setMsg({ erro: e.message }); } finally { setOcupado(false); }
+    try { await acao(); } catch (e) { avisar({ erro: e.message }); } finally { setOcupado(false); }
   };
 
   const salvar = (e) => {
     e.preventDefault();
     executar(async () => {
       aplicar(await api.put('/notificacoes/config', { ...form, hora_envio: Number(form.hora_envio), smtp_porta: Number(form.smtp_porta) }));
-      setMsg({ sucesso: 'Configuração salva.' });
+      avisar({ sucesso: 'Configuração salva.' });
     });
   };
-  const testar = () => executar(async () => setMsg({ sucesso: (await api.post('/notificacoes/teste')).mensagem }));
-  const novoLink = () => {
-    if (config.token_calendario && !window.confirm('Gerar um novo link? Agendas que assinaram o link atual deixarão de atualizar.')) return;
+  const testar = () => executar(async () => avisar({ sucesso: (await api.post('/notificacoes/teste')).mensagem }));
+  const novoLink = async () => {
+    if (config.token_calendario && !await confirmar({ titulo: 'Gerar um novo link?', texto: 'Agendas que assinaram o link atual deixarão de atualizar.', acao: 'Gerar novo link' })) return;
     executar(async () => aplicar(await api.post('/notificacoes/novo-link')));
   };
-  const copiar = () => navigator.clipboard?.writeText(linkAssinatura).then(() => setMsg({ sucesso: 'Link copiado.' }));
+  const copiar = () => navigator.clipboard?.writeText(linkAssinatura).then(() => avisar({ sucesso: 'Link copiado.' }));
   const baixar = (formato) => executar(() => baixarArquivo(`/notificacoes/calendario.${formato}`, `pagamentos-folha.${formato}`));
 
   return (
@@ -86,7 +88,6 @@ export default function Avisos() {
           </p>
         </div>
       </div>
-      <Alerta {...msg} />
 
       <section className="secao">
         <h3>Próximos pagamentos</h3>

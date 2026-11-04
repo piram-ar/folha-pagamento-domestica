@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { Alerta, Badge, Campo, useTrabalhadores } from '../components/ui';
-import { brl, dataBR, diasDoMes, hoje, mesAtual, mesLongo, ROTULOS } from '../utils';
+import { useAvisar, useConfirmar } from '../components/feedback';
+import { Abas, Badge, Campo, Carregando, InputValor, SeletorMes, useTrabalhadores } from '../components/ui';
+import { brl, dataBR, diasDoMes, hoje, mesAtual, mesLongo, numero, ROTULOS } from '../utils';
 
 const ABAS = [
   { tipo: 'vale_antecipacao', label: 'Vale / adiantamento' },
@@ -13,21 +14,30 @@ const ABAS = [
 const FORM_VAZIO = { valor: '', horas: '', percentual: '50', faltaPor: 'dias', dias: '1', descricao: '', data: hoje() };
 
 export default function Lancamentos() {
-  const trabalhadores = useTrabalhadores();
+  const lista = useTrabalhadores();
+  const trabalhadores = useMemo(() => lista || [], [lista]);
   const [mes, setMes] = useState(mesAtual());
   const [trabalhadorId, setTrabalhadorId] = useState('');
   const [tipo, setTipo] = useState('vale_antecipacao');
   const [form, setForm] = useState(FORM_VAZIO);
-  const [eventos, setEventos] = useState([]);
-  const [msg, setMsg] = useState({});
+  const [eventos, setEventos] = useState(null);
+  const [fechadas, setFechadas] = useState([]);
+  const [enviando, setEnviando] = useState(false);
+  const avisar = useAvisar();
+  const confirmar = useConfirmar();
 
   useEffect(() => {
     if (!trabalhadorId && trabalhadores.length) setTrabalhadorId(String(trabalhadores[0].id));
   }, [trabalhadores, trabalhadorId]);
 
   const carregar = useCallback(
-    () => api.get(`/eventos?mes_ano=${mes}`).then(setEventos).catch((e) => setMsg({ erro: e.message })),
-    [mes],
+    () => Promise.all([api.get(`/eventos?mes_ano=${mes}`), api.get(`/folha?mes_ano=${mes}&resumida=true`)])
+      .then(([lancados, folhas]) => {
+        setEventos(lancados);
+        setFechadas(folhas.filter((f) => f.status === 'fechada').map((f) => String(f.trabalhador_id)));
+      })
+      .catch((e) => avisar({ erro: e.message })),
+    [mes, avisar],
   );
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -38,7 +48,7 @@ export default function Lancamentos() {
 
   // Pré-visualização do valor calculado (o backend recalcula com precisão)
   const previa = useMemo(() => {
-    const horas = Number(String(form.horas).replace(',', '.')) || 0;
+    const horas = Number(numero(form.horas)) || 0;
     if (tipo === 'hora_extra') return valorHora * (1 + Number(form.percentual) / 100) * horas;
     if (tipo === 'falta') return form.faltaPor === 'dias' ? (salario / diasDoMes(mes)) * (Number(form.dias) || 0) : valorHora * horas;
     return null;
@@ -46,7 +56,6 @@ export default function Lancamentos() {
 
   const enviar = async (e) => {
     e.preventDefault();
-    setMsg({});
     const base = {
       trabalhador_id: Number(trabalhadorId),
       mes_ano: mes,
@@ -54,7 +63,7 @@ export default function Lancamentos() {
       data_lancamento: form.data,
       descricao: form.descricao || null,
     };
-    const num = (v) => String(v).replace(',', '.');
+    const num = numero;
     let dados;
     if (tipo === 'hora_extra') {
       dados = { ...base, quantidade_horas: num(form.horas), percentual_adicional: form.percentual };
@@ -66,41 +75,38 @@ export default function Lancamentos() {
     } else {
       dados = { ...base, valor: num(form.valor) };
     }
+    setEnviando(true);
     try {
       const ev = await api.post('/eventos', dados);
-      setMsg({ sucesso: `${ROTULOS.evento[ev.tipo]} de ${brl(ev.valor)} lançado para ${trabalhador.nome}.` });
+      avisar({ sucesso: `${ROTULOS.evento[ev.tipo]} de ${brl(ev.valor)} lançado para ${trabalhador.nome}.` });
       setForm({ ...FORM_VAZIO, percentual: form.percentual, data: form.data });
       carregar();
-    } catch (err) { setMsg({ erro: err.message }); }
+    } catch (err) { avisar({ erro: err.message }); } finally { setEnviando(false); }
   };
 
   const excluir = async (ev) => {
-    if (!window.confirm('Excluir este lançamento?')) return;
+    if (!await confirmar({ titulo: 'Excluir este lançamento?', texto: `${ROTULOS.evento[ev.tipo]} de ${brl(ev.valor)}, ${dataBR(ev.data_lancamento)}.`, acao: 'Excluir lançamento', perigo: true })) return;
     try {
       await api.del(`/eventos/${ev.id}`);
       carregar();
-    } catch (err) { setMsg({ erro: err.message }); }
+    } catch (err) { avisar({ erro: err.message }); }
   };
 
+  if (!lista) return <Carregando linhas={5} />;
+
+  const bloqueado = fechadas.includes(trabalhadorId);
   const nomes = Object.fromEntries(trabalhadores.map((t) => [t.id, t.nome]));
-  const totais = eventos.reduce((acc, ev) => ({ ...acc, [ev.tipo]: (acc[ev.tipo] || 0) + Number(ev.valor) }), {});
+  const totais = (eventos || []).reduce((acc, ev) => ({ ...acc, [ev.tipo]: (acc[ev.tipo] || 0) + Number(ev.valor) }), {});
 
   return (
     <>
       <div className="titulo-pagina">
         <h2>Lançamentos do mês</h2>
-        <Campo label="Competência">
-          <input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
-        </Campo>
+        <SeletorMes mes={mes} onChange={setMes} />
       </div>
 
       <section className="painel">
-        <div className="abas">
-          {ABAS.map((a) => (
-            <button key={a.tipo} className={tipo === a.tipo ? 'ativa' : ''} onClick={() => setTipo(a.tipo)}>{a.label}</button>
-          ))}
-        </div>
-        <Alerta {...msg} />
+        <Abas rotulo="Tipo de lançamento" ativa={tipo} onChange={setTipo} abas={ABAS.map((a) => ({ id: a.tipo, label: a.label.split(' /')[0] }))} />
         {trabalhadores.length === 0 ? <p className="vazio">Cadastre um trabalhador ativo para lançar vales, horas extras e faltas.</p> : (
           <form onSubmit={enviar}>
             <div className="grade-form">
@@ -115,14 +121,14 @@ export default function Lancamentos() {
 
               {(tipo === 'vale_antecipacao' || tipo === 'bonus') && (
                 <Campo label="Valor (R$)">
-                  <input type="number" min="0.01" step="0.01" value={form.valor} onChange={set('valor')} required autoFocus />
+                  <InputValor value={form.valor} onChange={set('valor')} required autoFocus />
                 </Campo>
               )}
 
               {tipo === 'hora_extra' && (
                 <>
                   <Campo label="Quantidade de horas">
-                    <input type="number" min="0.25" step="0.25" value={form.horas} onChange={set('horas')} required autoFocus />
+                    <InputValor value={form.horas} onChange={set('horas')} required autoFocus />
                   </Campo>
                   <Campo label="Adicional" dica="50% em dias normais; 100% em domingos e feriados.">
                     <select value={form.percentual} onChange={set('percentual')}>
@@ -147,7 +153,7 @@ export default function Lancamentos() {
                     </Campo>
                   ) : (
                     <Campo label="Horas">
-                      <input type="number" min="0.25" step="0.25" value={form.horas} onChange={set('horas')} required />
+                      <InputValor value={form.horas} onChange={set('horas')} required />
                     </Campo>
                   )}
                 </>
@@ -165,8 +171,15 @@ export default function Lancamentos() {
             {tipo === 'falta' && (
               <p className="dica">Registre faltas aqui e mantenha 30 dias trabalhados na folha, para não descontar em dobro.</p>
             )}
+            {bloqueado && (
+              <p className="alerta aviso">
+                A folha de {trabalhador?.nome} em {mesLongo(mes).toLowerCase()} está fechada. Reabra-a na tela da folha para lançar.
+              </p>
+            )}
             <div className="acoes direita">
-              <button className="btn primario">Lançar {ABAS.find((a) => a.tipo === tipo).label.toLowerCase()}</button>
+              <button className="btn primario" disabled={bloqueado || enviando}>
+                {enviando ? 'Lançando…' : `Lançar ${ABAS.find((a) => a.tipo === tipo).label.toLowerCase()}`}
+              </button>
             </div>
           </form>
         )}
@@ -177,9 +190,10 @@ export default function Lancamentos() {
         <div className="totais-linha">
           {ABAS.map((a) => <span key={a.tipo}>{a.label}: <strong>{brl(totais[a.tipo])}</strong></span>)}
         </div>
+        {!eventos ? <Carregando /> : (
         <div className="tabela-container">
           <table className="tabela-pilha">
-            <thead><tr><th>Data</th><th>Trabalhador</th><th>Tipo</th><th>Detalhe</th><th className="num">Valor</th><th /></tr></thead>
+            <thead><tr><th>Data</th><th>Trabalhador</th><th>Tipo</th><th>Detalhe</th><th className="num">Valor</th><th><span className="oculto">Ações</span></th></tr></thead>
             <tbody>
               {eventos.length === 0 && <tr><td colSpan={6} className="vazio">Nenhum lançamento neste mês.</td></tr>}
               {eventos.map((ev) => (
@@ -193,12 +207,15 @@ export default function Lancamentos() {
                     {ev.descricao && ` ${ev.descricao}`}
                   </td>
                   <td className="num" data-label="Valor">{brl(ev.valor)}</td>
-                  <td className="acoes-linha"><button className="btn pequeno perigo" onClick={() => excluir(ev)}>Excluir</button></td>
+                  <td className="acoes-linha">
+                    {!fechadas.includes(String(ev.trabalhador_id)) && <button className="btn pequeno perigo" onClick={() => excluir(ev)}>Excluir</button>}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        )}
       </section>
     </>
   );

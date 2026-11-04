@@ -22,6 +22,7 @@ from .routers import (
     folha,
     inss,
     notificacoes,
+    objetos_contrato,
     resumo,
     trabalhadores,
     usuarios,
@@ -102,7 +103,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Folha Doméstica", version="1.1.0", lifespan=lifespan,
+    title="Folha Doméstica", version="2.0.0", lifespan=lifespan,
     docs_url="/api/docs", openapi_url="/api/openapi.json",
 )
 
@@ -116,7 +117,7 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-for modulo in (auth, usuarios, contratante, trabalhadores, eventos, folha, ferias, decimo_terceiro, inss,
+for modulo in (auth, usuarios, contratante, objetos_contrato, trabalhadores, eventos, folha, ferias, decimo_terceiro, inss,
                notificacoes, resumo):
     app.include_router(modulo.router, prefix="/api")
 app.include_router(notificacoes.publico, prefix="/api")

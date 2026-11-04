@@ -57,7 +57,7 @@ jobs:
         working-directory: frontend/android
         env:
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 1.${{ github.run_number }}
+          VERSION_NAME: 2.${{ github.run_number }}
           KEYSTORE_PATH: ${{ steps.chave.outputs.assinado == 'true' && format('{0}/folha.p12', runner.temp) || '' }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -82,7 +82,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "app-v1.${{ github.run_number }}" "$RUNNER_TEMP/folha-domestica.apk" \
-            --title "App Android 1.${{ github.run_number }}" \
+          gh release create "app-v2.${{ github.run_number }}" "$RUNNER_TEMP/folha-domestica.apk" \
+            --title "App Android 2.${{ github.run_number }}" \
             --notes "APK do app Folha Doméstica. No celular, abra o arquivo e permita a instalação. Versões novas instalam por cima da anterior." \
             --latest

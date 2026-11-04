@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
-import { Alerta, Campo } from '../components/ui';
-import { cpfFmt } from '../utils';
+import { useAvisar } from '../components/feedback';
+import { Alerta, Carregando, Campo } from '../components/ui';
+import { cepMascara, cpfFmt, cpfMascara } from '../utils';
 
 const VAZIO = {
   nome: '', cpf: '', telefone: '', email: '',
@@ -12,15 +13,11 @@ const VAZIO = {
 const UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR',
   'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
-const cepFmt = (cep = '') => {
-  const d = cep.replace(/\D/g, '');
-  return d.length === 8 ? `${d.slice(0, 5)}-${d.slice(5)}` : cep;
-};
-
 export default function Contratante() {
   const { isAdmin } = useAuth();
   const [form, setForm] = useState(null);
-  const [msg, setMsg] = useState({});
+  const [erro, setErro] = useState('');
+  const avisar = useAvisar();
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -29,23 +26,22 @@ export default function Contratante() {
       .then((c) => {
         if (!c) return setForm(VAZIO);
         const dados = Object.fromEntries(Object.keys(VAZIO).map((k) => [k, c[k] ?? '']));
-        setForm({ ...dados, cpf: cpfFmt(dados.cpf), cep: cepFmt(dados.cep) });
+        setForm({ ...dados, cpf: cpfFmt(dados.cpf), cep: cepMascara(dados.cep) });
       })
-      .catch((e) => setMsg({ erro: e.message }));
+      .catch((e) => setErro(e.message));
   }, []);
 
-  if (!form) return msg.erro ? <Alerta erro={msg.erro} /> : <div className="carregando">Carregando…</div>;
+  if (!form) return erro ? <Alerta erro={erro} /> : <Carregando />;
 
   const set = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
 
   const salvar = async (e) => {
     e.preventDefault();
-    setMsg({});
     setSalvando(true);
     try {
       await api.put('/contratante', form);
-      setMsg({ sucesso: 'Dados salvos. Eles serão usados nos próximos recibos.' });
-    } catch (err) { setMsg({ erro: err.message }); } finally { setSalvando(false); }
+      avisar({ sucesso: 'Dados salvos. Eles serão usados nos próximos recibos.' });
+    } catch (err) { avisar({ erro: err.message }); } finally { setSalvando(false); }
   };
 
   return (
@@ -53,7 +49,6 @@ export default function Contratante() {
       <div className="titulo-pagina">
         <h2>Empregador / Contratante</h2>
       </div>
-      <Alerta {...msg} />
       {!isAdmin && <p className="dica">Somente administradores podem alterar estes dados.</p>}
 
       <form onSubmit={salvar}>
@@ -66,7 +61,7 @@ export default function Contratante() {
             </p>
             <div className="grade-form">
               <Campo label="Nome completo"><input value={form.nome} onChange={set('nome')} required /></Campo>
-              <Campo label="CPF"><input value={form.cpf} onChange={set('cpf')} placeholder="000.000.000-00" /></Campo>
+              <Campo label="CPF"><input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: cpfMascara(e.target.value) })} inputMode="numeric" placeholder="000.000.000-00" /></Campo>
               <Campo label="Telefone"><input type="tel" value={form.telefone} onChange={set('telefone')} /></Campo>
               <Campo label="E-mail"><input type="email" value={form.email} onChange={set('email')} /></Campo>
             </div>
@@ -75,7 +70,7 @@ export default function Contratante() {
           <section className="painel">
             <h3>Local da prestação do serviço</h3>
             <div className="grade-form">
-              <Campo label="CEP"><input value={form.cep} onChange={set('cep')} placeholder="00000-000" /></Campo>
+              <Campo label="CEP"><input value={form.cep} onChange={(e) => setForm({ ...form, cep: cepMascara(e.target.value) })} inputMode="numeric" placeholder="00000-000" /></Campo>
               <Campo label="Logradouro"><input value={form.logradouro} onChange={set('logradouro')} placeholder="Rua, avenida…" /></Campo>
               <Campo label="Número"><input value={form.numero} onChange={set('numero')} /></Campo>
               <Campo label="Complemento"><input value={form.complemento} onChange={set('complemento')} placeholder="Apto, bloco…" /></Campo>

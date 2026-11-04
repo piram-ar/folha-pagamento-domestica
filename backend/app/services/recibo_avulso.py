@@ -19,7 +19,6 @@ def _via(pdf: FPDF, titulo: str, via: str, t: Trabalhador, contratante: Contrata
          campos: list[tuple[str, str]], itens: list[dict], liquido: Decimal, referente: str) -> None:
     pdf.add_page()
     largura = pdf.w - pdf.l_margin - pdf.r_margin
-    clt = t.tipo_contrato == TipoContrato.com_registro
 
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(largura * 0.7, 7, titulo)
@@ -28,17 +27,19 @@ def _via(pdf: FPDF, titulo: str, via: str, t: Trabalhador, contratante: Contrata
     pdf.ln(2)
 
     cpf_contratante = formatar_cpf(contratante.cpf) if contratante and contratante.cpf else ""
-    _rotulo_valor(pdf, largura * 0.72, "EMPREGADOR(A)" if clt else "CONTRATANTE", contratante.nome if contratante else "")
+    _rotulo_valor(pdf, largura * 0.72, "EMPREGADOR(A)", contratante.nome if contratante else "")
     _rotulo_valor(pdf, largura * 0.28, "CPF", cpf_contratante)
     pdf.ln(10)
     _rotulo_valor(pdf, largura, "LOCAL DE TRABALHO", endereco(contratante) or "-")
     pdf.ln(10)
-    _rotulo_valor(pdf, largura * 0.72, "EMPREGADO(A)" if clt else "TRABALHADOR(A)", t.nome)
+    _rotulo_valor(pdf, largura * 0.72, "EMPREGADO(A)", t.nome)
     _rotulo_valor(pdf, largura * 0.28, "CPF", formatar_cpf(t.cpf))
+    pdf.ln(10)
+    _rotulo_valor(pdf, largura, "OBJETO DO CONTRATO", t.objeto_contrato)
     pdf.ln(10)
     _rotulo_valor(pdf, largura * 0.44, "FUNÇÃO", t.funcao or FUNCAO_PADRAO)
     _rotulo_valor(pdf, largura * 0.28, "DATA DE ADMISSÃO", t.data_admissao.strftime("%d/%m/%Y"))
-    _rotulo_valor(pdf, largura * 0.28, "VÍNCULO", "Com registro" if clt else "Sem registro")
+    _rotulo_valor(pdf, largura * 0.28, "VÍNCULO", "Com registro")
     pdf.ln(10)
     for rotulo, valor in campos:
         _rotulo_valor(pdf, largura / len(campos), rotulo, valor)
@@ -103,7 +104,7 @@ def _via_simples(pdf: FPDF, assunto: str, via: str, t: Trabalhador, contratante:
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(largura * 0.4, 9, f"R$ {brl(liquido)}", border=1, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Helvetica", "", 8)
-    pdf.cell(largura, 5, f"{assunto} - {via}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(largura, 5, f"{assunto} - {t.objeto_contrato} - {via}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(3)
 
     if contratante:
@@ -114,7 +115,8 @@ def _via_simples(pdf: FPDF, assunto: str, via: str, t: Trabalhador, contratante:
     pdf.multi_cell(
         largura, 6,
         f"Eu, {t.nome}, inscrito(a) no CPF sob o nº {formatar_cpf(t.cpf)}, declaro que recebi de {pagador}, "
-        f"a importância de R$ {brl(liquido)} ({valor_por_extenso(liquido)}), referente {referente}.",
+        f"a importância de R$ {brl(liquido)} ({valor_por_extenso(liquido)}), referente {referente}. "
+        f"Objeto do contrato: {t.objeto_contrato}.",
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
 

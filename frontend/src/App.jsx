@@ -1,22 +1,26 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import Layout from './components/Layout';
+import { Carregando } from './components/ui';
 import { sincronizarAvisos } from './notificacoesApp';
-import Avisos from './pages/Avisos';
-import AvisosApp from './pages/AvisosApp';
-import Contratante from './pages/Contratante';
 import Dashboard from './pages/Dashboard';
-import Ferias from './pages/Ferias';
-import Folha from './pages/Folha';
-import Inss from './pages/Inss';
-import Lancamentos from './pages/Lancamentos';
 import Login from './pages/Login';
 import Servidor from './pages/Servidor';
-import TrabalhadorDetalhe from './pages/TrabalhadorDetalhe';
-import Trabalhadores from './pages/Trabalhadores';
-import Usuarios from './pages/Usuarios';
 import { getServidor, MODO_APP } from './plataforma';
+
+// Cada tela é baixada ao ser aberta; Início e Login vêm no pacote inicial
+const Avisos = lazy(() => import('./pages/Avisos'));
+const AvisosApp = lazy(() => import('./pages/AvisosApp'));
+const Contratante = lazy(() => import('./pages/Contratante'));
+const Ferias = lazy(() => import('./pages/Ferias'));
+const Folha = lazy(() => import('./pages/Folha'));
+const Inss = lazy(() => import('./pages/Inss'));
+const Lancamentos = lazy(() => import('./pages/Lancamentos'));
+const ObjetosContrato = lazy(() => import('./pages/ObjetosContrato'));
+const TrabalhadorDetalhe = lazy(() => import('./pages/TrabalhadorDetalhe'));
+const Trabalhadores = lazy(() => import('./pages/Trabalhadores'));
+const Usuarios = lazy(() => import('./pages/Usuarios'));
 
 function SemConexao() {
   const { verificarSessao } = useAuth();
@@ -39,7 +43,7 @@ function SemConexao() {
 function Protegida({ children, somenteAdmin = false }) {
   const { usuario, isAdmin, carregando, semConexao } = useAuth();
   if (MODO_APP && !getServidor()) return <Navigate to="/servidor" replace />;
-  if (carregando) return <div className="carregando">Carregando…</div>;
+  if (carregando) return <div className="tela-cheia"><Carregando /></div>;
   if (semConexao) return <SemConexao />;
   if (!usuario) return <Navigate to="/login" replace />;
   if (somenteAdmin && !isAdmin) return <Navigate to="/" replace />;
@@ -94,6 +98,7 @@ export default function App() {
         <Route path="lancamentos" element={<Lancamentos />} />
         <Route path="folha" element={<Folha />} />
         <Route path="ferias" element={<Ferias />} />
+        <Route path="objetos-contrato" element={<ObjetosContrato />} />
         <Route path="contratante" element={<Contratante />} />
         <Route path="avisos" element={<Avisos />} />
         <Route path="inss" element={<Inss />} />

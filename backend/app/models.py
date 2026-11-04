@@ -100,6 +100,16 @@ class Contratante(Base):
     uf: Mapped[Optional[str]] = mapped_column(String(2))
 
 
+class ObjetoContrato(Base):
+    """O que o contrato cobre (Serviços Domésticos, de Babá...); sai em todos os recibos do trabalhador."""
+
+    __tablename__ = "objetos_contrato"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    descricao: Mapped[str] = mapped_column(String(120), unique=True)
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+
+
 class Trabalhador(Base):
     __tablename__ = "trabalhadores"
 
@@ -120,9 +130,12 @@ class Trabalhador(Base):
     dia_pagamento_adiantamento: Mapped[Optional[int]] = mapped_column(Integer)
     adiantamento_dia_util: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     funcao: Mapped[Optional[str]] = mapped_column(String(120))  # cargo impresso no holerite
+    # Sem FOREIGN KEY no banco (ver migração 0011); a API valida
+    objeto_contrato_id: Mapped[Optional[int]] = mapped_column(ForeignKey("objetos_contrato.id"))
     # Divisor do valor-hora (horas extras e atrasos)
     horas_mensais: Mapped[Decimal] = mapped_column(Horas, default=Decimal("200"), server_default="200")
 
+    objeto: Mapped[Optional["ObjetoContrato"]] = relationship(lazy="joined")
     beneficios: Mapped[list["BeneficioFixo"]] = relationship(
         back_populates="trabalhador", cascade="all, delete-orphan"
     )
@@ -144,6 +157,10 @@ class Trabalhador(Base):
         back_populates="trabalhador", cascade="all, delete-orphan",
         order_by="[DecimoTerceiro.ano, DecimoTerceiro.parcela]",
     )
+
+    @property
+    def objeto_contrato(self) -> str:
+        return self.objeto.descricao if self.objeto else "Serviços Domésticos"
 
 
 class BeneficioFixo(Base):

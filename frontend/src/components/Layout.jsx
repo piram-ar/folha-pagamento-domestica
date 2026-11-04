@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { MODO_APP } from '../plataforma';
 import { SeletorTema } from '../tema';
-import { Modal } from './ui';
+import { Carregando, Modal } from './ui';
 
 // Rotina do mês: aparecem no menu inferior do celular
 const PRINCIPAIS = [
@@ -12,11 +12,14 @@ const PRINCIPAIS = [
   { to: '/folha', label: 'Folha de pagamento', curto: 'Folha', icone: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6' },
   { to: '/ferias', label: 'Férias', curto: 'Férias', icone: 'M4 7h16v13H4zM4 11h16M9 3v6M15 3v6' },
 ];
-// Cadastros: ficam em "Mais" no celular
+// Cadastros e configurações: ficam em "Mais" no celular
 const CADASTROS = [
   { to: '/trabalhadores', label: 'Trabalhadores' },
-  { to: '/avisos', label: 'Avisos de pagamento' },
+  { to: '/objetos-contrato', label: 'Objetos do contrato' },
   { to: '/contratante', label: 'Empregador / contratante' },
+];
+const CONFIGURACOES = [
+  { to: '/avisos', label: 'Avisos de pagamento' },
   { to: '/inss', label: 'Tabela do INSS' },
 ];
 // No app Android, cadastros e configurações ficam no navegador; o "Mais" só tem o que é do celular
@@ -33,22 +36,44 @@ function Icone({ d }) {
   );
 }
 
+/** Ao trocar de tela: título da aba, volta ao topo e leva o foco ao conteúdo (leitores de tela anunciam a mudança). */
+function useTrocaDeTela(pathname, ligacoes) {
+  const principal = useRef(null);
+  const primeira = useRef(true);
+  useEffect(() => {
+    const atual = ligacoes.find((l) => (l.end ? pathname === l.to : pathname.startsWith(l.to)));
+    document.title = atual ? `${atual.label} · Folha Doméstica` : 'Folha Doméstica';
+    if (primeira.current) { primeira.current = false; return; }
+    window.scrollTo(0, 0);
+    principal.current?.focus({ preventScroll: true });
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  return principal;
+}
+
 export default function Layout() {
   const { usuario, isAdmin, logout } = useAuth();
   const { pathname } = useLocation();
   const [maisAberto, setMaisAberto] = useState(false);
-  const cadastros = MODO_APP ? OPCOES_APP
-    : isAdmin ? [...CADASTROS, { to: '/usuarios', label: 'Usuários do sistema' }] : CADASTROS;
-  const emCadastro = cadastros.some((l) => pathname.startsWith(l.to));
+  const configuracoes = isAdmin ? [...CONFIGURACOES, { to: '/usuarios', label: 'Usuários do sistema' }] : CONFIGURACOES;
+  const grupos = MODO_APP ? [['Neste celular', OPCOES_APP]] : [['Cadastros', CADASTROS], ['Configurações', configuracoes]];
+  const secundarias = grupos.flatMap(([, links]) => links);
+  const emSecundaria = secundarias.some((l) => pathname.startsWith(l.to));
+  const principal = useTrocaDeTela(pathname, [...PRINCIPAIS, ...secundarias]);
 
   return (
     <div className="app">
+      <a className="pular" href="#conteudo">Pular para o conteúdo</a>
       <aside className="lateral">
         <Link to="/" className="marca">Folha Doméstica</Link>
         <nav aria-label="Menu principal">
+          <p className="grupo-menu">Rotina do mês</p>
           {PRINCIPAIS.map((l) => <NavLink key={l.to} to={l.to} end={l.end}>{l.label}</NavLink>)}
-          <div className="grupo-secundario" />
-          {cadastros.map((l) => <NavLink key={l.to} to={l.to}>{l.label}</NavLink>)}
+          {grupos.map(([titulo, links]) => (
+            <div key={titulo} className="grupo-links">
+              <p className="grupo-menu">{titulo}</p>
+              {links.map((l) => <NavLink key={l.to} to={l.to}>{l.label}</NavLink>)}
+            </div>
+          ))}
         </nav>
         <div className="sessao">
           <SeletorTema />
@@ -62,24 +87,27 @@ export default function Layout() {
         <small>{usuario.nome}</small>
       </header>
 
-      <main className="conteudo">
-        <Outlet />
+      <main className="conteudo" id="conteudo" ref={principal} tabIndex={-1}>
+        <Suspense fallback={<Carregando />}><Outlet /></Suspense>
       </main>
 
       <nav className="menu-inferior" aria-label="Menu">
         {PRINCIPAIS.map((l) => (
           <NavLink key={l.to} to={l.to} end={l.end}><Icone d={l.icone} />{l.curto}</NavLink>
         ))}
-        <button className={emCadastro ? 'ativo' : ''} onClick={() => setMaisAberto(true)}>
+        <button className={emSecundaria ? 'ativo' : ''} onClick={() => setMaisAberto(true)}>
           <Icone d="M5 12h.01M12 12h.01M19 12h.01" />Mais
         </button>
       </nav>
 
       {maisAberto && (
-        <Modal titulo="Mais opções" onClose={() => setMaisAberto(false)}>
-          <div className="folha-mais" onClick={() => setMaisAberto(false)}>
-            {cadastros.map((l) => <Link key={l.to} to={l.to}>{l.label}</Link>)}
-          </div>
+        <Modal titulo="Mais opções" onClose={() => setMaisAberto(false)} fecharFora>
+          {grupos.map(([titulo, links]) => (
+            <div key={titulo} className="folha-mais" onClick={() => setMaisAberto(false)}>
+              <p className="grupo-menu">{titulo}</p>
+              {links.map((l) => <Link key={l.to} to={l.to}>{l.label}</Link>)}
+            </div>
+          ))}
           <div className="tema-mais">
             <span>Aparência</span>
             <SeletorTema />

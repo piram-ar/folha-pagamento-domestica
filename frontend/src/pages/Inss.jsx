@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
-import { Alerta, Badge, Campo, Modal } from '../components/ui';
-import { brl } from '../utils';
+import { useAvisar, useConfirmar } from '../components/feedback';
+import { Alerta, Carregando, Badge, Campo, ErroTela, Grupo, InputValor, Modal, SeletorMes } from '../components/ui';
+import { brl, numero } from '../utils';
 
 const pct = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 const mesVigencia = (iso) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
@@ -32,7 +33,6 @@ function FormTabela({ inicial, onSalvar, onCancelar }) {
   const [erro, setErro] = useState('');
 
   const setFaixa = (i, campo, valor) => setForm({ ...form, faixas: form.faixas.map((f, j) => (j === i ? { ...f, [campo]: valor } : f)) });
-  const num = (v) => String(v).replace(',', '.');
 
   const enviar = async (e) => {
     e.preventDefault();
@@ -41,7 +41,7 @@ function FormTabela({ inicial, onSalvar, onCancelar }) {
       await onSalvar({
         vigencia_inicio: `${form.vigencia}-01`,
         descricao: form.descricao || null,
-        faixas: form.faixas.map((f) => ({ teto: num(f.teto), aliquota: num(f.aliquota) })),
+        faixas: form.faixas.map((f) => ({ teto: numero(f.teto), aliquota: numero(f.aliquota) })),
       });
     } catch (err) { setErro(err.message); }
   };
@@ -50,9 +50,9 @@ function FormTabela({ inicial, onSalvar, onCancelar }) {
     <form onSubmit={enviar}>
       <Alerta erro={erro} />
       <div className="grade-form">
-        <Campo label="Vale a partir de" dica="Usada nas folhas a partir deste mês, até a próxima vigência cadastrada.">
-          <input type="month" value={form.vigencia} onChange={(e) => setForm({ ...form, vigencia: e.target.value })} required />
-        </Campo>
+        <Grupo label="Vale a partir de" dica="Usada nas folhas a partir deste mês, até a próxima vigência cadastrada.">
+          <SeletorMes mes={form.vigencia} onChange={(vigencia) => setForm({ ...form, vigencia })} />
+        </Grupo>
         <Campo label="Descrição"><input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} /></Campo>
       </div>
 
@@ -63,7 +63,7 @@ function FormTabela({ inicial, onSalvar, onCancelar }) {
           <div key={i} className="faixa-linha">
             <span className="faixa-num">{i + 1}ª</span>
             <Campo label={i === 0 ? 'Até (R$)' : `De ${form.faixas[i - 1].teto ? brl(Number(num(form.faixas[i - 1].teto)) + 0.01) : '…'} até (R$)`}>
-              <input type="number" min="0.01" step="0.01" value={f.teto} onChange={(e) => setFaixa(i, 'teto', e.target.value)} required />
+              <InputValor value={f.teto} onChange={(e) => setFaixa(i, 'teto', e.target.value)} required />
             </Campo>
             <Campo label="Alíquota (%)">
               <input type="number" min="0.01" max="100" step="0.01" value={f.aliquota} onChange={(e) => setFaixa(i, 'aliquota', e.target.value)} required />
@@ -88,15 +88,21 @@ export default function Inss() {
   const [tabelas, setTabelas] = useState(null);
   const [editando, setEditando] = useState(null); // null | 'nova' | tabela
   const [salario, setSalario] = useState('2000');
-  const [msg, setMsg] = useState({});
+  const [erro, setErro] = useState('');
+  const setMsg = useAvisar();
+  const confirmar = useConfirmar();
 
-  const carregar = useCallback(() => api.get('/inss/tabelas').then(setTabelas).catch((e) => setMsg({ erro: e.message })), []);
+  const carregar = useCallback(() => {
+    setErro('');
+    return api.get('/inss/tabelas').then(setTabelas).catch((e) => setErro(e.message));
+  }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
-  if (!tabelas) return msg.erro ? <Alerta erro={msg.erro} /> : <div className="carregando">Carregando…</div>;
+  if (erro) return <ErroTela mensagem={erro} onTentar={carregar} />;
+  if (!tabelas) return <Carregando />;
 
   const vigente = tabelas.find((t) => t.vigente);
-  const simulacao = vigente ? calcularInss(Number(String(salario).replace(',', '.')) || 0, vigente.faixas) : null;
+  const simulacao = vigente ? calcularInss(Number(numero(salario)) || 0, vigente.faixas) : null;
   const anoAtual = new Date().getFullYear();
   const desatualizada = vigente && Number(vigente.vigencia_inicio.slice(0, 4)) < anoAtual;
 
@@ -109,7 +115,7 @@ export default function Inss() {
   };
 
   const excluir = async (t) => {
-    if (!window.confirm(`Excluir a tabela com vigência em ${mesVigencia(t.vigencia_inicio)}?`)) return;
+    if (!await confirmar({ titulo: `Excluir a tabela de ${mesVigencia(t.vigencia_inicio)}?`, texto: 'Folhas já calculadas não mudam.', acao: 'Excluir tabela', perigo: true })) return;
     try {
       await api.del(`/inss/tabelas/${t.id}`);
       carregar();
@@ -125,7 +131,6 @@ export default function Inss() {
         </div>
         {isAdmin && <button className="btn primario" onClick={() => setEditando('nova')}>+ Nova vigência</button>}
       </div>
-      <Alerta {...msg} />
       {desatualizada && (
         <div className="alerta aviso">
           A tabela em uso é de {vigente.vigencia_inicio.slice(0, 4)}. O INSS reajusta as faixas todo ano, normalmente em
@@ -139,7 +144,7 @@ export default function Inss() {
           <h3>Simular desconto (tabela em uso)</h3>
           <div className="linha-form">
             <Campo label="Salário bruto (R$)">
-              <input type="number" min="0" step="0.01" value={salario} onChange={(e) => setSalario(e.target.value)} />
+              <InputValor value={salario} onChange={(e) => setSalario(e.target.value)} />
             </Campo>
             <p className="simulacao-total">INSS: <strong>{brl(simulacao.total)}</strong></p>
           </div>

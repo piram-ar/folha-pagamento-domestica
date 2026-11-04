@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { abrirPdf, api } from '../api';
 import { MODO_APP } from '../plataforma';
-import { Alerta, Badge, Campo, Modal, ModalPagamento } from '../components/ui';
+import { useAvisar, useConfirmar } from '../components/feedback';
+import { Alerta, Badge, Campo, Carregando, ErroTela, Modal, ModalPagamento } from '../components/ui';
 import { brl, dataBR, hoje, ROTULOS, somarDias } from '../utils';
 
 const COR_SITUACAO = {
   em_aquisicao: 'azul', disponivel: 'verde', vence_em_breve: 'amarelo', vencido: 'vermelho', quitado: 'neutro',
 };
 
-function RegistrarGozo({ resumo, onRegistrado }) {
+function RegistrarGozo({ resumo, onRegistrado, onClose }) {
   const comSaldo = resumo.periodos.filter((p) => p.saldo_dias > 0);
   const [form, setForm] = useState({
     periodo: '', data_inicio: hoje(), dias: 15, dias_abono: 0, observacao: '', data_pagamento: '',
   });
-  const [msg, setMsg] = useState({});
+  const [erro, setErro] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const avisar = useAvisar();
   const periodo = comSaldo.find((p) => String(p.id) === form.periodo) || comSaldo[0];
   const dias = Number(form.dias) || 0;
   const abono = Number(form.dias_abono) || 0;
@@ -25,7 +28,8 @@ function RegistrarGozo({ resumo, onRegistrado }) {
 
   const enviar = async (e) => {
     e.preventDefault();
-    setMsg({});
+    setErro('');
+    setEnviando(true);
     try {
       await api.post(`/ferias/trabalhador/${resumo.trabalhador_id}/gozos`, {
         historico_ferias_id: periodo?.id,
@@ -35,17 +39,15 @@ function RegistrarGozo({ resumo, onRegistrado }) {
         observacao: form.observacao || null,
         data_pagamento: pagamento,
       });
-      setMsg({ sucesso: `${dias} dias de férias${abono ? ` e ${abono} de abono` : ''} registrados e pagamento calculado. Gere o recibo em "Pagamento das férias".` });
-      setForm({ ...form, dias_abono: 0, observacao: '', data_pagamento: '' });
+      avisar({ sucesso: `${dias} dias de férias${abono ? ` e ${abono} de abono` : ''} registrados e pagamento calculado. O recibo já pode ser gerado.` });
       onRegistrado();
-    } catch (err) { setMsg({ erro: err.message }); }
+      onClose();
+    } catch (err) { setErro(err.message); setEnviando(false); }
   };
-
-  if (!comSaldo.length) return <p className="vazio">Sem saldo de férias disponível.</p>;
 
   return (
     <form onSubmit={enviar}>
-      <Alerta {...msg} />
+      <Alerta erro={erro} />
       <div className="grade-form">
         <Campo label="Período aquisitivo">
           <select value={form.periodo || String(periodo.id)} onChange={(e) => setForm({ ...form, periodo: e.target.value })}>
@@ -90,7 +92,10 @@ function RegistrarGozo({ resumo, onRegistrado }) {
       {dias > 0 && dias < 14 && periodo.dias_gozados === 0 && (
         <p className="dica">Lembrete (LC 150/2015): se dividir as férias em 2 períodos, um deles deve ter pelo menos 14 dias.</p>
       )}
-      <div className="acoes direita"><button className="btn primario">Registrar férias</button></div>
+      <div className="acoes direita">
+        <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+        <button className="btn primario" disabled={enviando}>{enviando ? 'Registrando…' : 'Registrar férias'}</button>
+      </div>
     </form>
   );
 }
@@ -115,13 +120,15 @@ function CalcularPagamento({ gozo, onClose, onConfirmar }) {
 }
 
 /** Valor de cada férias registrada, recibo (gerado só aqui) e situação do pagamento. */
-function PagamentosFerias({ resumo, onAlterado, onErro }) {
+function PagamentosFerias({ resumo, onAlterado }) {
+  const avisar = useAvisar();
+  const confirmar = useConfirmar();
   const [calculando, setCalculando] = useState(null);
   const [pagando, setPagando] = useState(null);
   const gozos = resumo.periodos.flatMap((p) => p.gozos).sort((a, b) => b.data_inicio.localeCompare(a.data_inicio));
   if (!gozos.length) return <p className="vazio">Nenhuma férias registrada.</p>;
 
-  const executar = (acao) => acao().then(onAlterado).catch((e) => onErro(e.message));
+  const executar = (acao) => acao().then(onAlterado).catch((e) => avisar({ erro: e.message }));
   const calcular = (g, data) => executar(async () => {
     await api.post(`/ferias/gozos/${g.id}/calcular`, { data_pagamento: data });
     setCalculando(null);
@@ -130,11 +137,11 @@ function PagamentosFerias({ resumo, onAlterado, onErro }) {
     await api.post(`/ferias/gozos/${g.id}/pagar`, { pago_em: data });
     setPagando(null);
   });
-  const desfazer = (g) => {
-    if (!window.confirm('Desfazer o pagamento destas férias? Elas voltam a ficar em aberto.')) return;
+  const desfazer = async (g) => {
+    if (!await confirmar({ titulo: 'Desfazer o pagamento?', texto: 'Estas férias voltam a ficar em aberto.', acao: 'Desfazer pagamento' })) return;
     executar(() => api.del(`/ferias/gozos/${g.id}/pagamento`));
   };
-  const recibo = (g) => abrirPdf(`/ferias/gozos/${g.id}/recibo.pdf`).catch((e) => onErro(e.message));
+  const recibo = (g) => abrirPdf(`/ferias/gozos/${g.id}/recibo.pdf`).catch((e) => avisar({ erro: e.message }));
 
   return (
     <>
@@ -142,7 +149,7 @@ function PagamentosFerias({ resumo, onAlterado, onErro }) {
         <table className="tabela-pilha">
           <thead>
             <tr>
-              <th>Férias</th><th className="num">Férias</th><th className="num">1/3</th><th className="num">Abono + 1/3</th>
+              <th>Período</th><th className="num">Férias</th><th className="num">1/3</th><th className="num">Abono + 1/3</th>
               <th className="num">INSS</th><th className="num">Líquido</th><th>Situação</th><th><span className="oculto">Ações</span></th>
             </tr>
           </thead>
@@ -207,37 +214,53 @@ function PagamentosFerias({ resumo, onAlterado, onErro }) {
 }
 
 export default function Ferias() {
-  const [dashboard, setDashboard] = useState([]);
+  const [dashboard, setDashboard] = useState(null);
+  const [registrando, setRegistrando] = useState(false);
+  const avisar = useAvisar();
+  const confirmar = useConfirmar();
   const [selecionado, setSelecionado] = useState(null);
   const [erro, setErro] = useState('');
 
-  const carregar = useCallback(() => api.get('/ferias/dashboard')
-    .then((lista) => {
+  const carregar = useCallback(() => {
+    setErro('');
+    return api.get('/ferias/dashboard').then((lista) => {
       setDashboard(lista);
       setSelecionado((atual) => atual ?? lista[0]?.trabalhador_id ?? null);
-    })
-    .catch((e) => setErro(e.message)), []);
+    }).catch((e) => setErro(e.message));
+  }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
+  if (erro) return <ErroTela mensagem={erro} onTentar={carregar} />;
+  if (!dashboard) return <Carregando linhas={5} />;
+
   const resumo = dashboard.find((r) => r.trabalhador_id === selecionado);
+  const temSaldo = resumo?.periodos.some((p) => p.saldo_dias > 0);
 
   const excluirGozo = async (g) => {
-    if (!window.confirm('Excluir este registro de férias? Os dias voltarão ao saldo.')) return;
+    if (!await confirmar({ titulo: 'Excluir este registro de férias?', texto: `De ${dataBR(g.data_inicio)} a ${dataBR(g.data_fim)}. Os dias voltam ao saldo.`, acao: 'Excluir registro', perigo: true })) return;
     try {
       await api.del(`/ferias/gozos/${g.id}`);
+      avisar({ sucesso: 'Registro de férias excluído.' });
       carregar();
-    } catch (e) { setErro(e.message); }
+    } catch (e) { avisar({ erro: e.message }); }
   };
 
   return (
     <>
-      <h2>Férias</h2>
-      <Alerta erro={erro} />
+      <div className="titulo-pagina">
+        <h2>Férias</h2>
+        {resumo && (
+          <button className="btn primario" disabled={!temSaldo} title={temSaldo ? undefined : 'Sem saldo de férias disponível'}
+            onClick={() => setRegistrando(true)}>
+            Registrar férias
+          </button>
+        )}
+      </div>
       <div className="cartoes-ferias">
         {dashboard.length === 0 && <p className="vazio">Nenhum trabalhador ativo.</p>}
         {dashboard.map((r) => (
           <button key={r.trabalhador_id} className={`cartao-ferias ${r.trabalhador_id === selecionado ? 'selecionado' : ''}`}
-            onClick={() => setSelecionado(r.trabalhador_id)}>
+            aria-pressed={r.trabalhador_id === selecionado} onClick={() => setSelecionado(r.trabalhador_id)}>
             <strong>{r.trabalhador_nome}</strong>
             <span className="saldo">{r.saldo_total} <small>dias de saldo</small></span>
             {r.periodo_atual && (
@@ -256,6 +279,11 @@ export default function Ferias() {
           {resumo.alertas.length > 0 && (
             <div className="alerta aviso"><ul>{resumo.alertas.map((a) => <li key={a}>{a}</li>)}</ul></div>
           )}
+
+          <section className="painel">
+            <h3>Pagamento das férias</h3>
+            <PagamentosFerias resumo={resumo} onAlterado={carregar} />
+          </section>
 
           <section className="painel">
             <h3>Períodos aquisitivos de {resumo.trabalhador_nome}</h3>
@@ -278,7 +306,7 @@ export default function Ferias() {
                         {p.gozos.length === 0 ? '—' : <div>{p.gozos.map((g) => (
                           <div key={g.id} className="gozo">
                             {dataBR(g.data_inicio)} a {dataBR(g.data_fim)} ({g.dias}d{g.dias_abono > 0 && ` + ${g.dias_abono} vendidos`}){g.observacao && ` · ${g.observacao}`}
-                            <button className="btn-link perigo" onClick={() => excluirGozo(g)} title="Excluir">✕</button>
+                            <button className="btn-link perigo" onClick={() => excluirGozo(g)} aria-label={`Excluir férias de ${dataBR(g.data_inicio)}`}>✕</button>
                           </div>
                         ))}</div>}
                       </td>
@@ -289,15 +317,11 @@ export default function Ferias() {
             </div>
           </section>
 
-          <section className="painel">
-            <h3>Pagamento das férias</h3>
-            <PagamentosFerias resumo={resumo} onAlterado={carregar} onErro={setErro} />
-          </section>
-
-          <section className="painel">
-            <h3>Registrar gozo de férias</h3>
-            <RegistrarGozo key={resumo.trabalhador_id} resumo={resumo} onRegistrado={carregar} />
-          </section>
+          {registrando && (
+            <Modal titulo={`Registrar férias de ${resumo.trabalhador_nome}`} onClose={() => setRegistrando(false)} largo>
+              <RegistrarGozo key={resumo.trabalhador_id} resumo={resumo} onRegistrado={carregar} onClose={() => setRegistrando(false)} />
+            </Modal>
+          )}
         </>
       )}
     </>

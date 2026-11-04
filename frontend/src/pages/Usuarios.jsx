@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import { useAvisar, useConfirmar } from '../components/feedback';
 import { Alerta, Badge, Campo, Modal } from '../components/ui';
 import { ROTULOS } from '../utils';
 
@@ -48,7 +49,8 @@ export default function Usuarios() {
   const { usuario: eu } = useAuth();
   const [lista, setLista] = useState([]);
   const [editando, setEditando] = useState(null); // null | 'novo' | usuario
-  const [msg, setMsg] = useState({});
+  const setMsg = useAvisar();
+  const confirmar = useConfirmar();
 
   const carregar = () => api.get('/usuarios').then(setLista).catch((e) => setMsg({ erro: e.message }));
   useEffect(() => { carregar(); }, []);
@@ -62,7 +64,7 @@ export default function Usuarios() {
   };
 
   const excluir = async (u) => {
-    if (!window.confirm(`Excluir o usuário ${u.nome}?`)) return;
+    if (!await confirmar({ titulo: `Excluir o usuário ${u.nome}?`, texto: 'A pessoa perde o acesso ao sistema.', acao: 'Excluir usuário', perigo: true })) return;
     try {
       await api.del(`/usuarios/${u.id}`);
       carregar();
@@ -75,7 +77,6 @@ export default function Usuarios() {
         <h2>Usuários do sistema</h2>
         <button className="btn primario" onClick={() => setEditando('novo')}>Cadastrar usuário</button>
       </div>
-      <Alerta {...msg} />
       <div className="tabela-container">
         <table className="tabela-pilha">
           <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th /></tr></thead>

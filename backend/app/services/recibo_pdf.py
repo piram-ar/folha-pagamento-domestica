@@ -1,5 +1,5 @@
 """Recibos em PDF: holerite (com vínculo, no padrão do recibo de salário do eSocial) e recibo simples
-de prestação de serviços domésticos (sem vínculo)."""
+de prestação de serviços (sem vínculo). Os dois trazem o objeto do contrato do trabalhador."""
 import json
 from decimal import Decimal
 
@@ -183,6 +183,8 @@ def _holerite(pdf: FPDF, folha: FolhaPagamento, detalhe: dict, contratante: Cont
     _rotulo_valor(pdf, largura * 0.72, "EMPREGADO(A)", t.nome)
     _rotulo_valor(pdf, largura * 0.28, "CPF DO EMPREGADO(A)", formatar_cpf(t.cpf))
     pdf.ln(10)
+    _rotulo_valor(pdf, largura, "OBJETO DO CONTRATO", t.objeto_contrato)
+    pdf.ln(10)
     _rotulo_valor(pdf, largura * 0.44, "FUNÇÃO", t.funcao or FUNCAO_PADRAO)
     _rotulo_valor(pdf, largura * 0.28, "DATA DE ADMISSÃO", t.data_admissao.strftime("%d/%m/%Y"))
     _rotulo_valor(pdf, largura * 0.28, "SALÁRIO CONTRATUAL", f"R$ {brl(folha.salario_base)}")
@@ -304,7 +306,7 @@ def _recibo_servico(pdf: FPDF, folha: FolhaPagamento, detalhe: dict, contratante
     pdf.cell(largura * 0.4, 9, f"R$ {brl(folha.salario_liquido)}", border=1, align="C",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Helvetica", "", 8)
-    pdf.cell(largura, 5, f"Prestação de serviços domésticos - {via}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(largura, 5, f"{t.objeto_contrato} - {via}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(3)
 
     if contratante:
@@ -317,8 +319,9 @@ def _recibo_servico(pdf: FPDF, folha: FolhaPagamento, detalhe: dict, contratante
         largura, 6,
         f"Eu, {t.nome}, inscrito(a) no CPF sob o nº {formatar_cpf(t.cpf)}, declaro que recebi de {pagador}, "
         f"a importância de R$ {brl(folha.salario_liquido)} ({valor_por_extenso(folha.salario_liquido)}), "
-        f"referente ao pagamento de serviços domésticos prestados em {competencia_extenso(folha.mes_ano)}"
-        + dias_da_folha(folha) + (f", no endereço {local}" if local else "") + ".",
+        f"referente ao pagamento de serviços prestados em {competencia_extenso(folha.mes_ano)}"
+        + dias_da_folha(folha) + (f", no endereço {local}" if local else "")
+        + f". Objeto do contrato: {t.objeto_contrato}.",
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
 

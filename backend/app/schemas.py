@@ -124,6 +124,7 @@ class TrabalhadorBase(BaseModel):
     dia_pagamento_adiantamento: Optional[DiaPagamento] = None
     adiantamento_dia_util: bool = False
     funcao: Optional[str] = Field(default=None, max_length=120)
+    objeto_contrato_id: int
     horas_mensais: HorasMensais = Decimal("200")
 
     @model_validator(mode="after")
@@ -159,6 +160,7 @@ class TrabalhadorUpdate(BaseModel):
     dia_pagamento_adiantamento: Optional[DiaPagamento] = None
     adiantamento_dia_util: Optional[bool] = None
     funcao: Optional[str] = Field(default=None, max_length=120)
+    objeto_contrato_id: Optional[int] = None
     horas_mensais: Optional[HorasMensais] = None
 
     @field_validator("cpf")
@@ -170,6 +172,23 @@ class TrabalhadorUpdate(BaseModel):
     @classmethod
     def _dias_semana(cls, v: Optional[str]) -> Optional[str]:
         return _validar_dias_semana(v) if v is not None else v
+
+
+class ObjetoContratoIn(BaseModel):
+    descricao: str = Field(min_length=3, max_length=120)
+    ativo: bool = True
+
+    @field_validator("descricao")
+    @classmethod
+    def _descricao(cls, v: str) -> str:
+        return " ".join(v.split())
+
+
+class ObjetoContratoOut(ORM):
+    id: int
+    descricao: str
+    ativo: bool
+    trabalhadores: int = 0  # quantos trabalhadores usam este objeto
 
 
 class BeneficioIn(BaseModel):
@@ -205,6 +224,8 @@ class TrabalhadorOut(ORM):
     dia_pagamento_adiantamento: Optional[int]
     adiantamento_dia_util: bool
     funcao: Optional[str]
+    objeto_contrato_id: Optional[int]
+    objeto_contrato: str
     horas_mensais: Decimal
 
 
@@ -376,6 +397,20 @@ class FolhaOut(ORM):
     detalhamento: Optional[dict] = None
     calculado_em: Optional[datetime]
     fechado_em: Optional[datetime]
+    pago_em: Optional[date]
+
+
+class FolhaResumoOut(BaseModel):
+    id: int
+    trabalhador_id: int
+    trabalhador_nome: str
+    tipo_contrato: TipoContrato
+    mes_ano: str
+    dias_trabalhados: int
+    dias_uteis: Optional[int]
+    encargos_recolher_guardar: Decimal
+    salario_liquido: Decimal
+    status: StatusFolha
     pago_em: Optional[date]
 
 

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { MODO_APP } from '../plataforma';
-import { Alerta, Campo, SituacaoFolha } from '../components/ui';
+import { Campo, Carregando, ErroTela, SituacaoFolha } from '../components/ui';
 import { brl, mesAtual, mesLongo, ROTULOS } from '../utils';
 
 /** O próximo passo do mês, na ordem da rotina: cadastrar → calcular → fechar. */
@@ -27,13 +27,8 @@ function Reservas({ resumo }) {
   );
   return (
     <section className="secao">
-      <div className="titulo-pagina compacto">
-        <div>
-          <h3>Reservas para férias, 13º e encargos</h3>
-          <p className="sub">Quanto deveria estar guardado hoje: 1/12 da remuneração por mês para o 13º e 1/12 + 1/3 para as férias, menos o que já foi pago.</p>
-        </div>
-        <div className="reserva-total"><strong>{brl(resumo.totais.reservas)}</strong><small>total a manter guardado</small></div>
-      </div>
+      <h3>Reservas para férias, 13º e encargos</h3>
+      <p className="sub bloco">Quanto deveria estar guardado hoje: 1/12 da remuneração por mês para o 13º e 1/12 + 1/3 para as férias, menos o que já foi pago.</p>
       <div className="cartoes-resumo">
         {ativos.map((t) => {
           const p = t.provisoes;
@@ -99,9 +94,46 @@ function PagamentosDoAno({ resumo, ano, onAno }) {
         </div>
       )}
       <p className="dica">
-        Folhas entram pela competência; férias e 13º, pela data de pagamento. Salários já sem os dias de férias, que
-        aparecem em Férias. Encargos: INSS patronal, GILRAT e FGTS estimados da guia DAE (sem o INSS descontado do empregado).
+        Folhas entram pela competência; férias e 13º, pela data de pagamento. Encargos: INSS patronal, GILRAT e FGTS
+        estimados da guia DAE (sem o INSS descontado do empregado).
       </p>
+    </section>
+  );
+}
+
+/** Os números que respondem "como estamos?" antes de qualquer lista. */
+function Indicadores({ folhas, resumo, ano }) {
+  const aPagar = folhas.filter((f) => !f.pago_em).reduce((s, f) => s + Number(f.salario_liquido), 0);
+  const itens = [
+    ['A pagar no mês', brl(aPagar), folhas.length ? 'folhas ainda não pagas' : 'nenhuma folha calculada'],
+    ['Em aberto', resumo ? brl(resumo.totais.em_aberto) : null, `todos os pagamentos de ${ano}`],
+    ['Reserva a manter', resumo ? brl(resumo.totais.reservas) : null, 'férias, 13º e encargos'],
+    [`Custo em ${ano}`, resumo ? brl(resumo.totais.total) : null, 'salários, benefícios e encargos'],
+  ];
+  return (
+    <dl className="indicadores">
+      {itens.map(([rotulo, valor, nota]) => (
+        <div key={rotulo}>
+          <dt>{rotulo}</dt>
+          <dd>{valor ?? <span className="traco" aria-label="Carregando" />}</dd>
+          <dd className="nota">{nota}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Primeiro uso: o caminho até a primeira folha. Some quando tudo está cadastrado. */
+function PrimeirosPassos({ contratante, trabalhadores }) {
+  if (MODO_APP || (contratante && trabalhadores.length)) return null;
+  return (
+    <section className="painel">
+      <h3>Primeiros passos</h3>
+      <ol className="passos">
+        <li className={contratante ? 'feito' : ''}><Link to="/contratante">Informe o empregador e o local do serviço</Link>: saem nos recibos.</li>
+        <li className={trabalhadores.length ? 'feito' : ''}><Link to="/trabalhadores">Cadastre quem trabalha na casa</Link>, com o objeto do contrato e o salário.</li>
+        <li>Lance vales e horas extras do mês e calcule a folha.</li>
+      </ol>
     </section>
   );
 }
@@ -117,24 +149,26 @@ export default function Dashboard() {
     api.get(`/resumo?ano=${ano}`).then(setResumo).catch((e) => setErro(e.message));
   }, [ano]);
 
-  useEffect(() => {
-    Promise.all([
+  const carregar = useCallback(() => {
+    setErro('');
+    return Promise.all([
       api.get('/trabalhadores?apenas_ativos=true'),
-      api.get(`/folha?mes_ano=${mes}`),
+      api.get(`/folha?mes_ano=${mes}&resumida=true`),
       api.get(`/eventos?mes_ano=${mes}`),
       api.get('/ferias/dashboard'),
+      api.get('/contratante'),
     ])
-      .then(([trabalhadores, folhas, eventos, ferias]) => setDados({ trabalhadores, folhas, eventos, ferias }))
+      .then(([trabalhadores, folhas, eventos, ferias, contratante]) => setDados({ trabalhadores, folhas, eventos, ferias, contratante }))
       .catch((e) => setErro(e.message));
   }, [mes]);
+  useEffect(() => { carregar(); }, [carregar]);
 
-  if (erro) return <Alerta erro={erro} />;
-  if (!dados) return <div className="carregando">Carregando…</div>;
+  if (erro) return <ErroTela mensagem={erro} onTentar={carregar} />;
+  if (!dados) return <Carregando linhas={6} />;
 
-  const { trabalhadores, folhas, eventos, ferias } = dados;
+  const { trabalhadores, folhas, eventos, ferias, contratante } = dados;
   const porTrabalhador = Object.fromEntries(folhas.map((f) => [f.trabalhador_id, f]));
   const fechadas = trabalhadores.filter((t) => porTrabalhador[t.id]?.status === 'fechada').length;
-  const soma = (lista, campo) => lista.reduce((s, x) => s + Number(x[campo]), 0);
   const passo = proximoPasso(trabalhadores, porTrabalhador, mes);
   const alertas = ferias.flatMap((f) => f.alertas.map((a) => ({ nome: f.trabalhador_nome, texto: a })));
 
@@ -157,15 +191,25 @@ export default function Dashboard() {
             <p>
               {fechadas === trabalhadores.length
                 ? 'Todas as folhas do mês estão fechadas. '
-                : `${fechadas} de ${trabalhadores.length} ${trabalhadores.length === 1 ? 'folha fechada' : 'folhas fechadas'}. `}
-              {folhas.length > 0 && (
-                <>Líquido a pagar <strong>{brl(soma(folhas, 'salario_liquido'))}</strong>; encargos e reserva <strong>{brl(soma(folhas, 'encargos_recolher_guardar'))}</strong>.</>
-              )}
+                : `${fechadas} de ${trabalhadores.length} ${trabalhadores.length === 1 ? 'folha fechada' : 'folhas fechadas'}.`}
             </p>
           )}
         </div>
         {passo && <Link className="btn primario" to={passo.to}>{passo.texto}</Link>}
       </header>
+
+      <PrimeirosPassos contratante={contratante} trabalhadores={trabalhadores} />
+      {trabalhadores.length > 0 && <Indicadores folhas={folhas} resumo={resumo} ano={ano} />}
+
+      {alertas.length > 0 && (
+        <section className="secao">
+          <h3>Férias a conceder</h3>
+          <ul className="lista-alertas">
+            {alertas.map((a) => <li key={a.nome + a.texto}><strong>{a.nome}</strong>: {a.texto}</li>)}
+          </ul>
+          <Link to="/ferias">Ver saldos e registrar férias</Link>
+        </section>
+      )}
 
       {trabalhadores.length > 0 && (
         <section className="secao">
@@ -193,18 +237,6 @@ export default function Dashboard() {
 
       {resumo && <Reservas resumo={resumo} />}
       {resumo && <PagamentosDoAno resumo={resumo} ano={ano} onAno={setAno} />}
-
-      <section className="secao">
-        <h3>Férias</h3>
-        {alertas.length === 0 ? (
-          <p className="vazio">Nenhum período vencido ou vencendo nos próximos 60 dias.</p>
-        ) : (
-          <ul className="lista-alertas">
-            {alertas.map((a) => <li key={a.nome + a.texto}><strong>{a.nome}</strong>: {a.texto}</li>)}
-          </ul>
-        )}
-        <Link to="/ferias">Ver saldos e registrar férias</Link>
-      </section>
     </>
   );
 }

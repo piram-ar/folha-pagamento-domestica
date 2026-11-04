@@ -2,22 +2,24 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import Reajustes from '../components/Reajustes';
+import { useAvisar, useConfirmar } from '../components/feedback';
 import TrabalhadorForm from '../components/TrabalhadorForm';
-import { Alerta, Badge, Campo } from '../components/ui';
-import { brl, cpfFmt, dataBR, DIAS_SEMANA, hoje, ROTULOS, vtPorDia } from '../utils';
+import { Abas, Badge, Campo, Carregando, ErroTela, InputValor } from '../components/ui';
+import { brl, cpfFmt, dataBR, DIAS_SEMANA, hoje, numero, ROTULOS, valorCampo, vtPorDia } from '../utils';
 
 const BENEFICIO_VAZIO = { tipo: 'vale_transporte', natureza: 'provento', descricao: '', valor: '', vigencia_inicio: hoje() };
 
 function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
-  const [salario, setSalario] = useState(trabalhador.salario_base);
+  const [salario, setSalario] = useState(valorCampo(trabalhador.salario_base));
   const [form, setForm] = useState(BENEFICIO_VAZIO);
   const [editandoId, setEditandoId] = useState(null);
-  const [msg, setMsg] = useState({});
+  const setMsg = useAvisar();
+  const confirmar = useConfirmar();
 
   const salvarSalario = async (e) => {
     e.preventDefault();
     try {
-      await api.put(`/trabalhadores/${trabalhador.id}`, { salario_base: String(salario).replace(',', '.') });
+      await api.put(`/trabalhadores/${trabalhador.id}`, { salario_base: numero(salario) });
       setMsg({ sucesso: 'Salário base atualizado.' });
       onAtualizar();
     } catch (err) { setMsg({ erro: err.message }); }
@@ -25,7 +27,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
 
   const salvarBeneficio = async (e) => {
     e.preventDefault();
-    const dados = { ...form, descricao: form.descricao || null, valor: String(form.valor).replace(',', '.') };
+    const dados = { ...form, descricao: form.descricao || null, valor: numero(form.valor) };
     try {
       if (editandoId) await api.put(`/trabalhadores/${trabalhador.id}/beneficios/${editandoId}`, dados);
       else await api.post(`/trabalhadores/${trabalhador.id}/beneficios`, dados);
@@ -37,7 +39,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
   };
 
   const excluir = async (b) => {
-    if (!window.confirm(`Remover ${ROTULOS.beneficio[b.tipo]}?`)) return;
+    if (!await confirmar({ titulo: `Remover ${ROTULOS.beneficio[b.tipo]}?`, texto: 'Sai das próximas folhas calculadas; folhas fechadas não mudam.', acao: 'Remover', perigo: true })) return;
     try {
       await api.del(`/trabalhadores/${trabalhador.id}/beneficios/${b.id}`);
       onAtualizar();
@@ -46,7 +48,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
 
   const editar = (b) => {
     setEditandoId(b.id);
-    setForm({ tipo: b.tipo, natureza: b.natureza, descricao: b.descricao || '', valor: b.valor, vigencia_inicio: b.vigencia_inicio });
+    setForm({ tipo: b.tipo, natureza: b.natureza, descricao: b.descricao || '', valor: valorCampo(b.valor), vigencia_inicio: b.vigencia_inicio });
   };
 
   const jornada = Number(trabalhador.horas_mensais);
@@ -55,7 +57,6 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
 
   return (
     <>
-      <Alerta {...msg} />
       <section className="painel">
         <h3>Salário base</h3>
         {trabalhador.reajustes?.length ? (
@@ -64,7 +65,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
           <>
             <form className="linha-form" onSubmit={salvarSalario}>
               <Campo label="Salário mensal (R$)">
-                <input type="number" min="0" step="0.01" value={salario} onChange={(e) => setSalario(e.target.value)} required />
+                <InputValor value={salario} onChange={(e) => setSalario(e.target.value)} required />
               </Campo>
               <button className="btn primario">Corrigir salário</button>
             </form>
@@ -125,7 +126,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
             </Campo>
             <Campo label={vtPorDia(form) ? 'Valor por dia útil (R$)' : 'Valor mensal (R$)'}
               dica={vtPorDia(form) ? 'Ida + volta de um dia de trabalho.' : undefined}>
-              <input type="number" min="0" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} required />
+              <InputValor value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} required />
             </Campo>
             <Campo label="Início da vigência" dica="Entra nas folhas a partir do mês desta data, inclusive nas de meses passados.">
               <input type="date" value={form.vigencia_inicio} onChange={(e) => setForm({ ...form, vigencia_inicio: e.target.value })} required />
@@ -134,7 +135,7 @@ function ConfiguracaoFinanceira({ trabalhador, onAtualizar }) {
           {form.tipo === 'vale_transporte' && form.natureza === 'desconto' && (
             <p className="dica">
               Sugestão de cota de 6%: {brl(cotaVT)}{' '}
-              <button type="button" className="btn-link" onClick={() => setForm({ ...form, valor: cotaVT.toFixed(2) })}>usar este valor</button>
+              <button type="button" className="btn-link" onClick={() => setForm({ ...form, valor: valorCampo(cotaVT) })}>usar este valor</button>
             </p>
           )}
           <div className="acoes direita">
@@ -153,28 +154,36 @@ export default function TrabalhadorDetalhe() {
   const [params, setParams] = useSearchParams();
   const aba = params.get('aba') || 'dados';
   const [trabalhador, setTrabalhador] = useState(null);
-  const [msg, setMsg] = useState({});
+  const [erro, setErro] = useState('');
+  const avisar = useAvisar();
+  const confirmar = useConfirmar();
 
-  const carregar = useCallback(
-    () => api.get(`/trabalhadores/${id}`).then(setTrabalhador).catch((e) => setMsg({ erro: e.message })),
-    [id],
-  );
+  const carregar = useCallback(() => {
+    setErro('');
+    return api.get(`/trabalhadores/${id}`).then(setTrabalhador).catch((e) => setErro(e.message));
+  }, [id]);
   useEffect(() => { carregar(); }, [carregar]);
 
-  if (!trabalhador) return msg.erro ? <Alerta erro={msg.erro} /> : <div className="carregando">Carregando…</div>;
+  if (erro) return <ErroTela mensagem={erro} onTentar={carregar} />;
+  if (!trabalhador) return <Carregando linhas={6} />;
 
   const salvarDados = async (dados) => {
     const t = await api.put(`/trabalhadores/${id}`, dados);
     setTrabalhador(t);
-    setMsg({ sucesso: 'Dados atualizados.' });
+    avisar({ sucesso: 'Dados atualizados.' });
   };
 
   const excluir = async () => {
-    if (!window.confirm(`Excluir ${trabalhador.nome}? Lançamentos, férias e folhas em rascunho também serão apagados.`)) return;
+    if (!await confirmar({
+      titulo: `Excluir ${trabalhador.nome}?`,
+      texto: 'Lançamentos, férias e folhas em rascunho também serão apagados. Se o contrato só terminou, desmarque Ativo em vez de excluir.',
+      acao: 'Excluir trabalhador',
+      perigo: true,
+    })) return;
     try {
       await api.del(`/trabalhadores/${id}`);
       navigate('/trabalhadores');
-    } catch (err) { setMsg({ erro: err.message }); }
+    } catch (err) { avisar({ erro: err.message }); }
   };
 
   return (
@@ -183,19 +192,16 @@ export default function TrabalhadorDetalhe() {
         <div>
           <Link to="/trabalhadores" className="voltar">← Trabalhadores</Link>
           <h2>{trabalhador.nome}</h2>
-          <p className="sub">CPF {cpfFmt(trabalhador.cpf)} · {ROTULOS.tipo_contrato[trabalhador.tipo_contrato]}</p>
+          <p className="sub">CPF {cpfFmt(trabalhador.cpf)} · {ROTULOS.tipo_contrato[trabalhador.tipo_contrato]} · {trabalhador.objeto_contrato}</p>
         </div>
         <button className="btn perigo" onClick={excluir}>Excluir</button>
       </div>
 
-      <div className="abas">
-        <button className={aba === 'dados' ? 'ativa' : ''} onClick={() => setParams({ aba: 'dados' })}>Dados cadastrais</button>
-        <button className={aba === 'financeiro' ? 'ativa' : ''} onClick={() => setParams({ aba: 'financeiro' })}>Configuração financeira</button>
-      </div>
+      <Abas rotulo="Cadastro do trabalhador" ativa={aba} onChange={(a) => setParams({ aba: a }, { replace: true })}
+        abas={[{ id: 'dados', label: 'Dados cadastrais' }, { id: 'financeiro', label: 'Configuração financeira' }]} />
 
       {aba === 'dados' ? (
         <section className="painel">
-          <Alerta {...msg} />
           <TrabalhadorForm key={trabalhador.id} inicial={trabalhador} onSalvar={salvarDados} />
         </section>
       ) : (
