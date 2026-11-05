@@ -95,7 +95,7 @@ export async function abrirPdf(path) {
     if (janela) janela.location.href = url;
     else window.location.href = url;
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  } catch (erro) {
+  } catch {
     janela?.close();
     throw new Error('Não foi possível gerar o PDF');
   }

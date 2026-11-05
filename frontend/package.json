@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "lint": "node lint/node_modules/eslint/bin/eslint.js --config lint/eslint.config.mjs src",
     "build:app": "vite build --mode app && cap sync android"
   },
   "dependencies": {

@@ -35,6 +35,12 @@ jobs:
           java-version: 21
           cache: gradle
 
+      # Falha aqui para o APK: nome inexistente passa pelo build e só quebra na tela
+      - name: Lint do frontend
+        run: |
+          npm ci --prefix lint --no-audit --no-fund
+          npm run lint
+
       - name: Build do frontend (modo app) e sincronização com o Android
         run: |
           npm ci --no-audit --no-fund

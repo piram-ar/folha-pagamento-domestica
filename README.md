@@ -113,6 +113,12 @@ cd backend && python -m venv .venv && .venv/bin/pip install -r requirements.txt
 cd frontend && npm install && npm run dev                                    # http://localhost:5173
 ```
 
+Lint do frontend (roda também no GitHub, antes de gerar o APK). As ferramentas ficam em `frontend/lint`, fora da imagem Docker, para não pesar o build no Pi:
+
+```bash
+cd frontend && npm ci --prefix lint && npm run lint
+```
+
 ## Regras de cálculo
 
 | Item | Regra |

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, useEffect } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import Layout from './components/Layout';
