@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { MODO_APP } from '../plataforma';
 import { SeletorTema } from '../tema';
-import { Carregando, Modal } from './ui';
+import { Carregando, LimiteErro, Modal } from './ui';
 
 // Rotina do mês: aparecem no menu inferior do celular
 const PRINCIPAIS = [
@@ -88,7 +88,8 @@ export default function Layout() {
       </header>
 
       <main className="conteudo" id="conteudo" ref={principal} tabIndex={-1}>
-        <Suspense fallback={<Carregando />}><Outlet /></Suspense>
+        {/* Trocar de tela limpa o erro; o menu continua de pé */}
+        <LimiteErro key={pathname}><Suspense fallback={<Carregando />}><Outlet /></Suspense></LimiteErro>
       </main>
 
       <nav className="menu-inferior" aria-label="Menu">

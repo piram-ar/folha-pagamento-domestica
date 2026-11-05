@@ -8,6 +8,13 @@ import { brl, numero } from '../utils';
 const pct = (v) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 const mesVigencia = (iso) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
+/** Rótulo do teto: a faixa começa um centavo acima do teto da anterior, que pode estar pela metade na digitação. */
+function rotuloTeto(faixaAnterior) {
+  if (!faixaAnterior) return 'Até (R$)';
+  const anterior = Number(numero(faixaAnterior.teto));
+  return `De ${faixaAnterior.teto && Number.isFinite(anterior) ? brl(anterior + 0.01) : '…'} até (R$)`;
+}
+
 /** Mesma conta do backend: cada faixa tributa só a parte do salário dentro dela. */
 function calcularInss(salario, faixas) {
   let total = 0;
@@ -62,7 +69,7 @@ function FormTabela({ inicial, onSalvar, onCancelar }) {
         {form.faixas.map((f, i) => (
           <div key={i} className="faixa-linha">
             <span className="faixa-num">{i + 1}ª</span>
-            <Campo label={i === 0 ? 'Até (R$)' : `De ${form.faixas[i - 1].teto ? brl(Number(num(form.faixas[i - 1].teto)) + 0.01) : '…'} até (R$)`}>
+            <Campo label={rotuloTeto(form.faixas[i - 1])}>
               <InputValor value={f.teto} onChange={(e) => setFaixa(i, 'teto', e.target.value)} required />
             </Campo>
             <Campo label="Alíquota (%)">

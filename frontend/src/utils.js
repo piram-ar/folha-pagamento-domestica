@@ -69,8 +69,10 @@ export const mesLongo = (mesAno) => {
   return `${MESES[Number(m) - 1]} de ${a}`;
 };
 
-export const somarDias =(iso, dias) => {
+/** Vazio com data vazia ou incompleta: o campo fica assim enquanto a pessoa digita. */
+export const somarDias = (iso, dias) => {
   const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
   d.setDate(d.getDate() + dias);
   return d.toISOString().slice(0, 10);
 };

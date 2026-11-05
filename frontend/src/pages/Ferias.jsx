@@ -75,7 +75,7 @@ function RegistrarGozo({ resumo, onRegistrado, onClose }) {
           <input value={form.observacao} onChange={(e) => setForm({ ...form, observacao: e.target.value })} />
         </Campo>
       </div>
-      {dias > 0 && (
+      {dias > 0 && form.data_inicio && (
         <p className="previa">
           Retorno após {dataBR(somarDias(form.data_inicio, dias - 1))}
           {abono > 0 && <> · {abono} dias vendidos</>} · Saldo restante no período:{' '}

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { Component, useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api';
 import { brl, dataBR, hoje, mesLongo, somarMeses } from '../utils';
 
@@ -112,6 +112,18 @@ export function ErroTela({ mensagem, onTentar }) {
       {onTentar && <button className="btn pequeno" onClick={onTentar}>Tentar de novo</button>}
     </div>
   );
+}
+
+/** Erro ao desenhar uma tela: sem isto o React desmonta tudo e sobra a página em branco, sem menu. */
+export class LimiteErro extends Component {
+  state = { falhou: false };
+
+  static getDerivedStateFromError() { return { falhou: true }; }
+
+  render() {
+    if (!this.state.falhou) return this.props.children;
+    return <ErroTela mensagem="Algo deu errado nesta tela. O que já estava salvo não foi perdido." onTentar={() => window.location.reload()} />;
+  }
 }
 
 /** Abas de uma tela. O painel fica com quem usa; ←/→ trocam de aba. */
