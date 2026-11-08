@@ -168,6 +168,7 @@ strong { font-weight: 650; }
 .lateral .sessao { margin-top: auto; padding: 0 10px; font-size: .9rem; color: var(--suave); }
 .lateral .sessao strong { display: block; color: var(--tinta); font-weight: 600; }
 .lateral .sessao .btn-link { padding-left: 0; }
+.lateral .sessao .btn-link + .btn-link { margin-left: 14px; }
 
 .conteudo { padding: 36px 40px 64px; max-width: 1120px; width: 100%; }
 

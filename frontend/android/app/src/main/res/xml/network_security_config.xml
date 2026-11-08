@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- O Raspberry Pi usa um certificado da "CA da rede de casa" (scripts/configurar-https.sh). Para o app aceitá-lo,
+     a CA é instalada no celular (Configurações > Segurança > Instalar certificado) e o app confia nos
+     certificados instalados pelo usuário. http:// continua liberado só para a transição: o app troca
+     sozinho para https:// assim que o Pi responde por HTTPS. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

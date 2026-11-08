@@ -60,8 +60,11 @@ export const api = {
 async function buscarArquivo(path) {
   const res = await fetch(`${apiBase()}${path}`, { headers: { Authorization: `Bearer ${getToken()}` } });
   if (!res.ok) throw new Error('Não foi possível gerar o arquivo');
-  // Nome sugerido pelo servidor (ex.: recibo_2026-10_ana.pdf)
-  const nome = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1];
+  // Nome sugerido pelo servidor (ex.: recibo_2026-10_ana.pdf): o completo em UTF-8 (filename*) ou o simples
+  const cabecalho = res.headers.get('Content-Disposition') || '';
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(cabecalho)?.[1];
+  let nome = /filename="([^"]+)"/.exec(cabecalho)?.[1];
+  try { if (utf8) nome = decodeURIComponent(utf8); } catch { /* fica o nome simples */ }
   return { blob: await res.blob(), nome };
 }
 

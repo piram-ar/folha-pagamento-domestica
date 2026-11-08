@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { abrirPdf, api } from '../api';
+import { useAuth } from '../AuthContext';
 import { MODO_APP } from '../plataforma';
 import { useAvisar, useConfirmar } from '../components/feedback';
 import { Alerta, Badge, Campo, Carregando, ErroTela, Modal, ModalPagamento } from '../components/ui';
@@ -121,6 +122,7 @@ function CalcularPagamento({ gozo, onClose, onConfirmar }) {
 
 /** Valor de cada férias registrada, recibo (gerado só aqui) e situação do pagamento. */
 function PagamentosFerias({ resumo, onAlterado }) {
+  const { isAdmin } = useAuth();
   const avisar = useAvisar();
   const confirmar = useConfirmar();
   const [calculando, setCalculando] = useState(null);
@@ -186,7 +188,7 @@ function PagamentosFerias({ resumo, onAlterado }) {
                       </button>
                     )}
                     {calculado && !g.pago_em && <button className="btn pequeno sucesso" onClick={() => setPagando(g)}>Marcar pago</button>}
-                    {g.pago_em && <button className="btn pequeno" onClick={() => desfazer(g)}>Desfazer</button>}
+                    {g.pago_em && isAdmin && <button className="btn pequeno" onClick={() => desfazer(g)}>Desfazer</button>}
                   </td>
                 </tr>
               );

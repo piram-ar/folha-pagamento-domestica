@@ -13,6 +13,10 @@ RUN npm run build && find dist -type f \( -name '*.js' -o -name '*.css' -o -name
 FROM nginx:1.27-alpine
 # 1 worker basta para uso doméstico (o padrão "auto" sobe 4 no Pi 3, cada um com sua RAM)
 RUN sed -i 's/^worker_processes .*;/worker_processes 1;/' /etc/nginx/nginx.conf
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Esconde a versão do Nginx nas respostas e nas páginas de erro (vale para o bloco http inteiro)
+RUN echo 'server_tokens off;' > /etc/nginx/conf.d/00-geral.conf
+COPY nginx/ /etc/nginx/folha/
+# Escolhe HTTP ou HTTPS na subida, conforme exista o certificado (scripts/configurar-https.sh)
+RUN install -m 755 /etc/nginx/folha/escolher-config.sh /docker-entrypoint.d/40-folha-https.sh
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 80 443

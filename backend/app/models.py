@@ -75,6 +75,10 @@ class Usuario(Base):
     senha_hash: Mapped[str] = mapped_column(String(255))
     perfil: Mapped[PerfilUsuario] = mapped_column(_enum(PerfilUsuario), default=PerfilUsuario.padrao)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Vai no token: incrementar derruba as sessões abertas (troca de senha, de perfil, desativação)
+    versao_sessao: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Obriga a definir uma senha própria no próximo acesso (senha de instalação ou definida pelo administrador)
+    trocar_senha: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
 
 class Contratante(Base):

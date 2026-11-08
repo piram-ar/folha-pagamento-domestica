@@ -2,6 +2,7 @@
 # Backup consistente do SQLite (seguro com a aplicação rodando).
 # Agende no Pi com:  crontab -e  ->  0 3 * * * /mnt/dietpi_userdata/folha-domestica/scripts/backup.sh
 set -e
+umask 077  # backups têm CPFs e salários: só o root lê
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DESTINO="$DIR/backups"
 mkdir -p "$DESTINO"

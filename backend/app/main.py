@@ -46,9 +46,10 @@ def criar_admin_inicial() -> None:
                 senha_hash=gerar_hash_senha(config.ADMIN_PASSWORD),
                 perfil=PerfilUsuario.admin,
                 ativo=True,
+                trocar_senha=True,  # a senha do .env é só de instalação: o primeiro login pede uma nova
             ))
             db.commit()
-            log.warning("Administrador inicial criado: %s (troque a senha após o primeiro acesso)", config.ADMIN_EMAIL)
+            log.warning("Administrador inicial criado: %s (o primeiro acesso pede uma senha nova)", config.ADMIN_EMAIL)
 
 
 def aplicar_migracoes() -> None:
@@ -102,9 +103,12 @@ async def lifespan(_app: FastAPI):
     tarefa.cancel()
 
 
+# A documentação interativa lista todas as rotas: só fica no ar para testes (API_DOCS=1 no .env)
 app = FastAPI(
-    title="Folha Doméstica", version="2.0.0", lifespan=lifespan,
-    docs_url="/api/docs", openapi_url="/api/openapi.json",
+    title="Folha Doméstica", version="2.1.0", lifespan=lifespan,
+    docs_url="/api/docs" if config.API_DOCS else None,
+    openapi_url="/api/openapi.json" if config.API_DOCS else None,
+    redoc_url=None,
 )
 
 # O app Android carrega a interface de http://localhost (WebView do Capacitor) e chama a API do Pi.

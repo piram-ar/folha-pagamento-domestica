@@ -3,7 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..database import get_db
-from ..deps import usuario_atual
+from ..deps import exigir_admin, usuario_atual
+from ..services.texto import disposicao, primeiro_nome as _primeiro_nome
 from ..models import DecimoTerceiro, Trabalhador
 from ..schemas import DecimoTerceiroIn, DecimoTerceiroOut, DecimoTerceiroPreviaOut, PagamentoFolhaIn
 from ..services.decimo_terceiro import calcular_parcela, previsao
@@ -83,7 +84,7 @@ def pagar(decimo_id: int, dados: PagamentoFolhaIn | None = None, db: Session = D
     return _saida(d)
 
 
-@router.delete("/{decimo_id}/pagamento", response_model=DecimoTerceiroOut)
+@router.delete("/{decimo_id}/pagamento", response_model=DecimoTerceiroOut, dependencies=[Depends(exigir_admin)])
 def desfazer_pagamento(decimo_id: int, db: Session = Depends(get_db)):
     d = _obter(db, decimo_id)
     d.pago_em = None
@@ -110,9 +111,9 @@ def recibo(decimo_id: int, db: Session = Depends(get_db)):
     from ..services.recibo_avulso import recibo_decimo_terceiro  # import tardio: fpdf2 só quando gera PDF
 
     d = _obter(db, decimo_id)
-    nome = d.trabalhador.nome.split()[0].lower()
     return Response(
         content=recibo_decimo_terceiro(d, obter_contratante(db)),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="13o_{d.ano}_parcela{d.parcela}_{nome}.pdf"'},
+        headers={"Content-Disposition": disposicao(
+            f"13o_{d.ano}_parcela{d.parcela}_{_primeiro_nome(d.trabalhador.nome)}.pdf")},
     )

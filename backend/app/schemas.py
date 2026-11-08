@@ -6,6 +6,7 @@ from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
+from .config import SENHA_MINIMA
 from .models import (
     NaturezaBeneficio,
     PerfilUsuario,
@@ -31,8 +32,13 @@ class ORM(BaseModel):
 # ---------- Autenticação / usuários ----------
 
 class LoginIn(BaseModel):
-    email: str
-    senha: str
+    email: str = Field(max_length=160)
+    senha: str = Field(max_length=128)
+
+
+class TrocaSenhaIn(BaseModel):
+    senha_atual: str = Field(max_length=128)
+    senha_nova: str = Field(min_length=SENHA_MINIMA, max_length=72)
 
 
 class UsuarioOut(ORM):
@@ -41,6 +47,7 @@ class UsuarioOut(ORM):
     email: str
     perfil: PerfilUsuario
     ativo: bool
+    trocar_senha: bool = False
 
 
 class TokenOut(BaseModel):
@@ -52,7 +59,7 @@ class TokenOut(BaseModel):
 class UsuarioCreate(BaseModel):
     nome: str = Field(min_length=2, max_length=120)
     email: str = Field(min_length=3, max_length=160)
-    senha: str = Field(min_length=6, max_length=72)
+    senha: str = Field(min_length=SENHA_MINIMA, max_length=72)
     perfil: PerfilUsuario = PerfilUsuario.padrao
     ativo: bool = True
 
@@ -65,7 +72,7 @@ class UsuarioCreate(BaseModel):
 class UsuarioUpdate(BaseModel):
     nome: Optional[str] = Field(default=None, min_length=2, max_length=120)
     email: Optional[str] = Field(default=None, min_length=3, max_length=160)
-    senha: Optional[str] = Field(default=None, min_length=6, max_length=72)
+    senha: Optional[str] = Field(default=None, min_length=SENHA_MINIMA, max_length=72)
     perfil: Optional[PerfilUsuario] = None
     ativo: Optional[bool] = None
 

@@ -124,7 +124,7 @@ export default function Avisos() {
           </div>
         ) : isAdmin ? (
           <button type="button" className="btn" onClick={novoLink}>Criar link de assinatura</button>
-        ) : <p className="vazio">Nenhum link criado. Peça a um administrador.</p>}
+        ) : <p className="vazio">O link de assinatura fica com o administrador: peça o link a quem administra o sistema.</p>}
       </section>
 
       <section className="painel">

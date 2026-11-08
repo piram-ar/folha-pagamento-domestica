@@ -13,6 +13,7 @@ from fpdf.enums import XPos, YPos
 from ..models import Contratante, DecimoTerceiro, GozoFerias, TipoContrato, Trabalhador
 from .recibo_pdf import (FUNCAO_PADRAO, _linha_de_recorte, _rotulo_valor, brl, celula_ajustada, endereco, formatar_cpf,
                          valor_por_extenso)
+from .texto_pdf import PDF
 
 
 def _via(pdf: FPDF, titulo: str, via: str, t: Trabalhador, contratante: Contratante | None,
@@ -148,7 +149,7 @@ def _via_simples(pdf: FPDF, assunto: str, via: str, t: Trabalhador, contratante:
 
 def _documento(titulo: str, assunto: str, t: Trabalhador, contratante: Contratante | None, campos, itens, liquido,
                referente: str) -> bytes:
-    pdf = FPDF(format="A4")
+    pdf = PDF(format="A4")
     pdf.set_margins(12, 12, 12)
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.set_title(f"{titulo} {t.nome}")

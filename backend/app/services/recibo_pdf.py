@@ -9,6 +9,7 @@ from fpdf.enums import XPos, YPos
 from ..models import Contratante, FolhaPagamento, TipoContrato
 from .calendario import dias_no_mes
 from .esocial import rubrica_do_item
+from .texto_pdf import PDF
 
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
          "agosto", "setembro", "outubro", "novembro", "dezembro"]
@@ -371,7 +372,7 @@ def _linha_de_recorte(pdf: FPDF) -> None:
 
 def gerar_recibo_pdf(folha: FolhaPagamento, contratante: Contratante | None = None) -> bytes:
     detalhe = json.loads(folha.detalhamento or "{}")
-    pdf = FPDF(format="A4")
+    pdf = PDF(format="A4")
     pdf.set_margins(12, 12, 12)
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.set_title(f"Recibo {folha.trabalhador.nome} {folha.mes_ano}")

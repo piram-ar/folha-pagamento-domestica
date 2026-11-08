@@ -50,14 +50,16 @@ tar -cf - --exclude=node_modules --exclude=data-local --exclude=.env --exclude=d
 # no Pi
 cd /mnt/dietpi_userdata/folha-domestica
 sed -i 's/\r$//' scripts/*.sh && chmod +x scripts/*.sh
-cp .env.example .env && chmod 600 .env
-nano .env                            # SECRET_KEY (openssl rand -hex 32) e senha do admin
+cp .env.example .env && chmod 600 .env && mkdir -p data backups && chmod 700 data backups
+nano .env                            # e-mail e senha provisória do admin (a SECRET_KEY a API gera sozinha)
+sh scripts/configurar-https.sh       # certificado HTTPS da rede de casa (veja "Segurança e HTTPS")
 docker compose up -d --build         # o primeiro build no Pi 3 leva de 15 a 30 minutos
 ```
 
 Em outro Raspberry Pi OS, o Docker vem de `curl -fsSL https://get.docker.com | sh` e o resto é igual.
 
-Acesse `http://<ip-do-raspberry>` de qualquer dispositivo da rede e entre com `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+Acesse `https://<ip-do-raspberry>` de qualquer dispositivo da rede e entre com `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+Essa senha é provisória: no primeiro acesso o sistema pede uma senha nova (mínimo de 10 caracteres).
 Depois, cadastre os dados do empregador/contratante e o local da prestação do serviço na tela
 **Empregador / Contratante** (eles saem no recibo).
 
@@ -102,15 +104,21 @@ odar-local.cmd -Reinstalar   :: reinstala dependências após mudar requirements
 ```
 
 Na primeira vez as dependências são instaladas automaticamente. Abre `http://localhost:5173`
-(login padrão `admin@local` / `admin123`, ou o que estiver no `.env`). O banco de testes fica em
+(login padrão `admin@local` / `admin123`, ou o que estiver no `.env`; o primeiro acesso pede uma senha nova). O banco de testes fica em
 `data-local/`, separado do `data/` do Pi. `Ctrl+C` encerra tudo.
 
 ## Desenvolvimento local (sem Docker)
 
 ```bash
 cd backend && python -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --reload    # http://localhost:8000/api/docs
+API_DOCS=1 .venv/bin/uvicorn app.main:app --reload                          # http://localhost:8000/api/docs
 cd frontend && npm install && npm run dev                                    # http://localhost:5173
+```
+
+Testes de segurança do backend (login, permissões, tokens, PDFs, CSV):
+
+```bash
+cd backend && pip install -r requirements.txt -r requirements-dev.txt && python -m pytest tests -q
 ```
 
 Lint do frontend (roda também no GitHub, antes de gerar o APK). As ferramentas ficam em `frontend/lint`, fora da imagem Docker, para não pesar o build no Pi:
@@ -201,8 +209,10 @@ e-mail etc.**), férias e **avisos de pagamento como notificação**. Cadastros 
 navegador.
 
 - **Instalar:** baixe `https://github.com/piram-ar/folha-pagamento-domestica/releases/latest/download/folha-domestica.apk`
-  no celular, abra e permita a instalação. Na primeira abertura, informe o endereço do Pi (ex.: `http://192.168.5.7`).
-- **Rede:** o app conversa com o Pi pela rede de casa (HTTP). O backend libera CORS só para a origem do app.
+  no celular, abra e permita a instalação. Na primeira abertura, informe o endereço do Pi (ex.: `https://192.168.5.7`).
+- **Rede:** o app conversa com o Pi pela rede de casa por HTTPS. Para isso, instale no celular a CA da rede de
+  casa (seção "Segurança e HTTPS"). Quem ainda tem `http://` salvo passa para `https://` sozinho quando o Pi
+  responde por HTTPS. O backend libera CORS só para a origem do app.
 - **Avisos no celular:** em **Mais > Avisos neste celular**. O app busca no Pi os pagamentos dos próximos
   120 dias e agenda notificações locais (mesma antecedência e horário do e-mail). Elas tocam com o app fechado
   e fora de casa; a agenda se refaz sempre que o app é aberto no Wi-Fi de casa.
@@ -211,6 +221,34 @@ navegador.
   rode uma vez `bash scripts/configurar-assinatura-android.sh` (a cópia local fica em `~/.android-chaves`).
   Sem a chave, o workflow gera só um APK de teste (artefato), sem release.
 - **Desenvolvimento:** `npm run build:app` gera o modo app e sincroniza o projeto `frontend/android`.
+
+## Segurança e HTTPS
+
+- **Acesso:** perfis administrador e padrão. Só o administrador gerencia usuários, empregador, tabela do INSS,
+  avisos por e-mail, reabre folhas e **desfaz pagamentos** (folha, férias e 13º).
+- **Senhas:** mínimo de 10 caracteres. Senha de instalação ou definida pelo administrador é provisória: a pessoa
+  define a sua no próximo acesso (**Minha senha** no menu). Trocar a senha, o perfil ou desativar alguém encerra
+  as sessões abertas em todos os aparelhos.
+- **Login:** 5 senhas erradas seguidas bloqueiam o e-mail por 15 minutos (`TENTATIVAS_LOGIN` e
+  `BLOQUEIO_LOGIN_MINUTOS` no `.env`). O tempo de resposta é o mesmo para e-mails que existem ou não.
+- **Chave dos tokens:** sem `SECRET_KEY` no `.env`, a API gera uma aleatória em `data/secret_key`. Chave curta
+  ou de exemplo impede a API de subir.
+- **HTTPS na rede de casa:** `sh scripts/configurar-https.sh` cria uma autoridade certificadora (CA) própria em
+  `/root/folha-ca` e o certificado do Pi em `./certs`. A CA só vale para endereços da rede local (192.168.x.x,
+  10.x.x.x, `*.local`, `*.lan`), então não serve para se passar por outros sites. Com o certificado, a porta 80
+  redireciona para HTTPS; `API_HTTP_LEGADO=1` mantém a API em `http://` para o app antigo (mude para `0` e rode
+  `docker compose up -d` quando todos os celulares tiverem o app novo).
+  Instale `certs/folha-ca.crt` em cada aparelho, conferindo a impressão digital mostrada pelo script:
+  - **Windows:** clique duas vezes no arquivo > Instalar certificado > Usuário atual > "Autoridades de
+    Certificação Raiz Confiáveis". Ou: `certutil -user -addstore Root folha-ca.crt`.
+  - **Android:** Configurações > Segurança > Mais configurações > Criptografia e credenciais > Instalar
+    certificado > Certificado de CA.
+  - **iPhone:** abra o arquivo, instale o perfil e ative em Ajustes > Geral > Sobre > Ajustes de Confiança.
+  - O certificado do servidor vale 825 dias; para renovar, rode o script de novo (a CA continua a mesma).
+- **Auditoria do Pi:** `sh scripts/auditar-pi.sh` confere SSH, senhas padrão, portas, permissões, chave e HTTPS
+  sem mudar nada.
+- **Fora de casa:** nunca abra as portas 80/443 no roteador. Para acessar de fora, use uma VPN (WireGuard
+  ou Tailscale).
 
 ## Aparência
 

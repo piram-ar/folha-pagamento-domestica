@@ -43,6 +43,7 @@ def criar(dados: UsuarioCreate, db: Session = Depends(get_db)):
     usuario = Usuario(
         nome=dados.nome, email=dados.email, senha_hash=gerar_hash_senha(dados.senha),
         perfil=dados.perfil, ativo=dados.ativo,
+        trocar_senha=True,  # a senha foi escolhida pelo administrador: a pessoa define a sua no primeiro acesso
     )
     db.add(usuario)
     db.commit()
@@ -68,10 +69,17 @@ def atualizar(usuario_id: int, dados: UsuarioUpdate, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail="Você não pode desativar o próprio usuário")
 
     senha = campos.pop("senha", None)
+    encerrar_sessoes = bool(senha) or (
+        campos.get("perfil", usuario.perfil) != usuario.perfil or campos.get("ativo", usuario.ativo) != usuario.ativo
+    )
     if senha:
         usuario.senha_hash = gerar_hash_senha(senha)
+        # Senha definida pelo administrador para outra pessoa: ela troca no próximo acesso
+        usuario.trocar_senha = usuario.id != atual.id
     for campo, valor in campos.items():
         setattr(usuario, campo, valor)
+    if encerrar_sessoes:  # o token antigo deixa de valer em todos os aparelhos
+        usuario.versao_sessao += 1
     db.commit()
     db.refresh(usuario)
     return usuario

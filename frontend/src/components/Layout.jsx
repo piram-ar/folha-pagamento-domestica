@@ -27,6 +27,7 @@ const OPCOES_APP = [
   { to: '/avisos-celular', label: 'Avisos neste celular' },
   { to: '/servidor', label: 'Servidor (Raspberry Pi)' },
 ];
+const MINHA_SENHA = { to: '/senha', label: 'Minha senha' };
 
 function Icone({ d }) {
   return (
@@ -56,7 +57,7 @@ export default function Layout() {
   const [maisAberto, setMaisAberto] = useState(false);
   const configuracoes = isAdmin ? [...CONFIGURACOES, { to: '/usuarios', label: 'Usuários do sistema' }] : CONFIGURACOES;
   const grupos = MODO_APP ? [['Neste celular', OPCOES_APP]] : [['Cadastros', CADASTROS], ['Configurações', configuracoes]];
-  const secundarias = grupos.flatMap(([, links]) => links);
+  const secundarias = [...grupos.flatMap(([, links]) => links), MINHA_SENHA];
   const emSecundaria = secundarias.some((l) => pathname.startsWith(l.to));
   const principal = useTrocaDeTela(pathname, [...PRINCIPAIS, ...secundarias]);
 
@@ -78,6 +79,7 @@ export default function Layout() {
         <div className="sessao">
           <SeletorTema />
           <strong>{usuario.nome}</strong>
+          <Link to={MINHA_SENHA.to} className="btn-link">Minha senha</Link>
           <button className="btn-link" onClick={logout}>Sair</button>
         </div>
       </aside>
@@ -113,7 +115,8 @@ export default function Layout() {
             <span>Aparência</span>
             <SeletorTema />
           </div>
-          <div className="folha-mais">
+          <div className="folha-mais" onClick={() => setMaisAberto(false)}>
+            <Link to={MINHA_SENHA.to}>{MINHA_SENHA.label}</Link>
             <button className="sair" onClick={logout}>Sair ({usuario.nome})</button>
           </div>
         </Modal>

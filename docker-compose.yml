@@ -31,8 +31,16 @@ services:
     restart: always
     ports:
       - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     environment:
       TZ: America/Sao_Paulo
+      # 1 = a API continua respondendo também por http:// (app Android antigo). Mude para 0 no .env
+      # depois de instalar o app novo, e tudo passa a exigir HTTPS.
+      API_HTTP_LEGADO: ${API_HTTP_LEGADO:-1}
+    volumes:
+      # Certificado do servidor gerado por scripts/configurar-https.sh. Sem ele, o site fica só em HTTP.
+      # A chave da autoridade certificadora NÃO fica aqui (está em /root/folha-ca, fora do container).
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - backend
     mem_limit: 64m

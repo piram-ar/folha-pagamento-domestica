@@ -30,6 +30,13 @@ export function AuthProvider({ children }) {
     setUsuario(data.usuario);
   };
 
+  /** Troca a própria senha; o servidor devolve um token novo (o antigo deixa de valer em todos os aparelhos). */
+  const trocarSenha = async (senhaAtual, senhaNova) => {
+    const data = await api.post('/auth/senha', { senha_atual: senhaAtual, senha_nova: senhaNova });
+    setToken(data.access_token);
+    setUsuario(data.usuario);
+  };
+
   const logout = () => {
     clearToken();
     setUsuario(null);
@@ -38,7 +45,7 @@ export function AuthProvider({ children }) {
   const isAdmin = usuario?.perfil === 'admin';
 
   return (
-    <AuthContext.Provider value={{ usuario, isAdmin, carregando, semConexao, verificarSessao, login, logout }}>
+    <AuthContext.Provider value={{ usuario, isAdmin, carregando, semConexao, verificarSessao, login, trocarSenha, logout }}>
       {children}
     </AuthContext.Provider>
   );

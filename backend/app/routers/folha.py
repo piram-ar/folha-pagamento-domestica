@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, defer, joinedload, selectinload
 
 from ..database import get_db
 from ..deps import exigir_admin, usuario_atual
+from ..services.texto import disposicao, primeiro_nome as _primeiro_nome
 from ..models import FolhaPagamento, StatusFolha, TipoContrato, Trabalhador
 from ..schemas import CalcularFolhaIn, DiasUteisOut, FolhaOut, FolhaResumoOut, MesAno, PagamentoFolhaIn
 from ..services.calculo_folha import beneficio_vigente, gerar_ou_atualizar, vt_por_dia
@@ -109,9 +110,9 @@ def guia_esocial(formato: str, mes_ano: MesAno, db: Session = Depends(get_db)):
         conteudo, tipo = guia_esocial.gerar_csv(folhas), "text/csv; charset=utf-8"
     else:
         conteudo, tipo = guia_esocial.gerar_pdf(folhas, mes_ano), "application/pdf"
-    disposicao = "inline" if formato == "pdf" else "attachment"
+    modo = "inline" if formato == "pdf" else "attachment"
     return Response(content=conteudo, media_type=tipo,
-                    headers={"Content-Disposition": f'{disposicao}; filename="esocial_{mes_ano}.{formato}"'})
+                    headers={"Content-Disposition": disposicao(f"esocial_{mes_ano}.{formato}", modo)})
 
 
 @router.get("/{folha_id}", response_model=FolhaOut)
@@ -153,7 +154,7 @@ def registrar_pagamento(folha_id: int, dados: PagamentoFolhaIn | None = None, db
     return _saida(folha)
 
 
-@router.delete("/{folha_id}/pagamento", response_model=FolhaOut)
+@router.delete("/{folha_id}/pagamento", response_model=FolhaOut, dependencies=[Depends(exigir_admin)])
 def desfazer_pagamento(folha_id: int, db: Session = Depends(get_db)):
     folha = _obter(db, folha_id)
     folha.pago_em = None
@@ -177,9 +178,8 @@ def recibo_pdf(folha_id: int, db: Session = Depends(get_db)):
     from ..services.recibo_pdf import gerar_recibo_pdf
 
     folha = _obter(db, folha_id)
-    nome_arquivo = f"recibo_{folha.mes_ano}_{folha.trabalhador.nome.split()[0].lower()}.pdf"
     return Response(
         content=gerar_recibo_pdf(folha, obter_contratante(db)),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{nome_arquivo}"'},
+        headers={"Content-Disposition": disposicao(f"recibo_{folha.mes_ano}_{_primeiro_nome(folha.trabalhador.nome)}.pdf")},
     )

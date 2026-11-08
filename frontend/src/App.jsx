@@ -7,6 +7,7 @@ import { sincronizarAvisos } from './notificacoesApp';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Servidor from './pages/Servidor';
+import TrocarSenha from './pages/TrocarSenha';
 import { getServidor, MODO_APP } from './plataforma';
 
 // Cada tela é baixada ao ser aberta; Início e Login vêm no pacote inicial
@@ -46,6 +47,7 @@ function Protegida({ children, somenteAdmin = false }) {
   if (carregando) return <div className="tela-cheia"><Carregando /></div>;
   if (semConexao) return <SemConexao />;
   if (!usuario) return <Navigate to="/login" replace />;
+  if (usuario.trocar_senha) return <TrocarSenha obrigatoria />;
   if (somenteAdmin && !isAdmin) return <Navigate to="/" replace />;
   return children;
 }
@@ -82,6 +84,7 @@ export default function App() {
           <Route path="folha" element={<Folha />} />
           <Route path="ferias" element={<Ferias />} />
           <Route path="avisos-celular" element={<AvisosApp />} />
+          <Route path="senha" element={<TrocarSenha />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -102,6 +105,7 @@ export default function App() {
         <Route path="contratante" element={<Contratante />} />
         <Route path="avisos" element={<Avisos />} />
         <Route path="inss" element={<Inss />} />
+        <Route path="senha" element={<TrocarSenha />} />
         <Route path="usuarios" element={<Protegida somenteAdmin><Usuarios /></Protegida>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

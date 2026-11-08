@@ -26,8 +26,9 @@ function UsuarioForm({ inicial, onSalvar, onCancelar }) {
       <div className="grade-form">
         <Campo label="Nome"><input value={form.nome} onChange={set('nome')} required /></Campo>
         <Campo label="E-mail"><input type="email" value={form.email} onChange={set('email')} required /></Campo>
-        <Campo label={inicial ? 'Nova senha (deixe em branco para manter)' : 'Senha'}>
-          <input type="password" minLength={6} value={form.senha} onChange={set('senha')} required={!inicial} />
+        <Campo label={inicial ? 'Nova senha (deixe em branco para manter)' : 'Senha provisória'}
+          dica="Mínimo de 10 caracteres. No primeiro acesso, a pessoa define a própria senha.">
+          <input type="password" minLength={10} maxLength={72} autoComplete="new-password" value={form.senha} onChange={set('senha')} required={!inicial} />
         </Campo>
         <Campo label="Perfil" dica="Padrão: gerencia trabalhadores, folha e férias. Admin: também gerencia usuários.">
           <select value={form.perfil} onChange={set('perfil')}>

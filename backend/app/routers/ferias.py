@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..database import get_db
-from ..deps import usuario_atual
+from ..deps import exigir_admin, usuario_atual
+from ..services.texto import disposicao, primeiro_nome as _primeiro_nome
 from ..models import GozoFerias, HistoricoFerias, Trabalhador
 from ..schemas import (
     CalcularFeriasIn,
@@ -190,7 +191,7 @@ def pagar(gozo_id: int, dados: PagamentoFolhaIn | None = None, db: Session = Dep
     return _pagamento_out(gozo)
 
 
-@router.delete("/gozos/{gozo_id}/pagamento", response_model=PagamentoFeriasOut)
+@router.delete("/gozos/{gozo_id}/pagamento", response_model=PagamentoFeriasOut, dependencies=[Depends(exigir_admin)])
 def desfazer_pagamento(gozo_id: int, db: Session = Depends(get_db)):
     gozo = _obter_gozo(db, gozo_id)
     gozo.pago_em = None
@@ -205,11 +206,11 @@ def recibo(gozo_id: int, db: Session = Depends(get_db)):
     gozo = _obter_gozo(db, gozo_id)
     if gozo.valor_ferias is None:
         raise HTTPException(status_code=409, detail="Calcule o pagamento das férias antes de gerar o recibo")
-    nome = gozo.periodo.trabalhador.nome.split()[0].lower()
     return Response(
         content=recibo_ferias(gozo, obter_contratante(db)),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="ferias_{gozo.data_inicio:%Y-%m-%d}_{nome}.pdf"'},
+        headers={"Content-Disposition": disposicao(
+            f"ferias_{gozo.data_inicio:%Y-%m-%d}_{_primeiro_nome(gozo.periodo.trabalhador.nome)}.pdf")},
     )
 
 

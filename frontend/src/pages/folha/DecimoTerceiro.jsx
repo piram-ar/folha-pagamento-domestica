@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { abrirPdf, api } from '../../api';
+import { useAuth } from '../../AuthContext';
 import { useAvisar, useConfirmar } from '../../components/feedback';
 import { Badge, Campo, Carregando, ErroTela, Modal, ModalPagamento } from '../../components/ui';
 import { MODO_APP } from '../../plataforma';
@@ -32,6 +33,7 @@ function GerarParcela({ linha, parcela, existente, ano, onClose, onConfirmar }) 
 
 /** Parcelas do 13º salário do ano: geradas aqui, abatidas da provisão anual do 13º na tela Início. */
 export default function DecimoTerceiro() {
+  const { isAdmin } = useAuth();
   const avisar = useAvisar();
   const confirmar = useConfirmar();
   const [ano, setAno] = useState(new Date().getFullYear());
@@ -86,7 +88,7 @@ export default function DecimoTerceiro() {
         <span className="acoes-linha">
           <button className="btn pequeno primario" onClick={() => recibo(d)}>{MODO_APP ? 'Enviar recibo' : 'Recibo'}</button>
           {!d.pago_em && <button className="btn pequeno sucesso" onClick={() => setPagando(d)}>Marcar paga</button>}
-          {d.pago_em && <button className="btn pequeno" onClick={() => desfazer(d)}>Desfazer</button>}
+          {d.pago_em && isAdmin && <button className="btn pequeno" onClick={() => desfazer(d)}>Desfazer</button>}
           {!d.pago_em && !(parcela === 1 && temSegunda) && (
             <button className="btn pequeno" onClick={() => setGerando({ linha, parcela, existente: d })}>Recalcular</button>
           )}

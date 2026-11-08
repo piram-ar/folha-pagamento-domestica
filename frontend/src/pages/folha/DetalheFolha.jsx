@@ -86,8 +86,9 @@ export default function DetalheFolha({ folhaId, onClose, onAlterado }) {
           {fechada && !folha.pago_em && isAdmin && (
             <button className="btn" onClick={() => executar(() => api.post(`/folha/${folha.id}/reabrir`), `Folha de ${nome} reaberta.`)}>Reabrir folha</button>
           )}
+          {/* Desfazer um pagamento é do administrador, como reabrir a folha */}
           {folha.pago_em
-            ? <button className="btn" onClick={desfazer}>Desfazer pagamento</button>
+            ? isAdmin && <button className="btn" onClick={desfazer}>Desfazer pagamento</button>
             : <button className="btn sucesso" onClick={() => setPagando(true)}>Marcar como paga</button>}
           <button className="btn primario" onClick={pdf}>
             {MODO_APP ? 'Enviar recibo' : fechada ? 'Imprimir recibo' : 'Ver recibo (rascunho)'}

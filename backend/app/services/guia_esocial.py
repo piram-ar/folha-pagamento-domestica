@@ -6,6 +6,7 @@ pagamento", rubrica a rubrica. A guia lista, por empregado, as rubricas e valore
 import csv
 import io
 import json
+import re
 from decimal import Decimal
 
 from fpdf import FPDF
@@ -15,6 +16,7 @@ from ..models import FolhaPagamento
 from .esocial import AUTOMATICAS, RUBRICAS, rubrica_do_item
 from .recibo_pdf import brl, celula_ajustada, competencia_extenso, dias_da_folha, formatar_cpf, referencia_exibida
 from .salario import inicio_do_mes
+from .texto_pdf import PDF
 
 
 def linhas_da_folha(folha: FolhaPagamento) -> list[dict]:
@@ -51,6 +53,14 @@ def _alertas(folha: FolhaPagamento) -> list[str]:
     return alertas
 
 
+def _celula(valor) -> str:
+    """Texto que o Excel leria como fórmula (=, +, -, @) ganha um apóstrofo: um nome como =HYPERLINK(...) não vira link."""
+    texto = "" if valor is None else str(valor)
+    if texto[:1] in ("+", "-") and re.fullmatch(r"[+-][\d.,]+", texto):
+        return texto  # valor negativo continua número
+    return "'" + texto if texto[:1] in ("=", "+", "-", "@", "\t", "\r") else texto
+
+
 def gerar_csv(folhas: list[FolhaPagamento]) -> bytes:
     saida = io.StringIO()
     escritor = csv.writer(saida, delimiter=";")
@@ -58,13 +68,14 @@ def gerar_csv(folhas: list[FolhaPagamento]) -> bytes:
                        "valor", "observacao"])
     for f in folhas:
         for l in linhas_da_folha(f):
-            escritor.writerow([f.mes_ano, formatar_cpf(f.trabalhador.cpf), f.trabalhador.nome, l["rubrica"],
-                               l["descricao"], l["tipo"], l["referencia"], brl(l["valor"]), l["observacao"]])
+            escritor.writerow([_celula(c) for c in (
+                f.mes_ano, formatar_cpf(f.trabalhador.cpf), f.trabalhador.nome, l["rubrica"],
+                l["descricao"], l["tipo"], l["referencia"], brl(l["valor"]), l["observacao"])])
     return ("﻿" + saida.getvalue()).encode("utf-8")  # BOM: o Excel abre os acentos corretamente
 
 
 def gerar_pdf(folhas: list[FolhaPagamento], mes_ano: str) -> bytes:
-    pdf = FPDF(format="A4")
+    pdf = PDF(format="A4")
     pdf.set_margins(12, 12, 12)
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.set_title(f"Guia de lançamento eSocial {mes_ano}")

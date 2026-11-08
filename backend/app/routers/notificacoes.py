@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import exigir_admin, usuario_atual
-from ..models import ConfigNotificacoes
+from ..models import ConfigNotificacoes, PerfilUsuario, Usuario
 from ..schemas import ConfigNotificacoesIn, ConfigNotificacoesOut, ProximoPagamentoOut
 from ..services import notificacoes as servico
 from ..services.pagamentos import pagamentos_entre
@@ -25,9 +25,17 @@ def _saida(config: ConfigNotificacoes) -> ConfigNotificacoesOut:
     return ConfigNotificacoesOut(**dados, smtp_senha_definida=bool(config.smtp_senha))
 
 
-@router.get("/config", response_model=ConfigNotificacoesOut, dependencies=autenticado)
-def ler_config(db: Session = Depends(get_db)):
-    return _saida(servico.obter_config(db))
+# Só o administrador vê o link secreto do calendário e os dados da conta de e-mail
+CAMPOS_RESTRITOS = {"token_calendario": None, "smtp_host": None, "smtp_usuario": None, "smtp_remetente": None,
+                    "destinatarios": None, "ultimo_erro": None, "smtp_senha_definida": False}
+
+
+@router.get("/config", response_model=ConfigNotificacoesOut)
+def ler_config(db: Session = Depends(get_db), usuario: Usuario = Depends(usuario_atual)):
+    saida = _saida(servico.obter_config(db))
+    if usuario.perfil != PerfilUsuario.admin:
+        saida = saida.model_copy(update=CAMPOS_RESTRITOS)
+    return saida
 
 
 @router.put("/config", response_model=ConfigNotificacoesOut, dependencies=somente_admin)

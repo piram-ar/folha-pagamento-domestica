@@ -4,7 +4,10 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { AuthProvider } from './AuthContext';
 import { FeedbackProvider } from './components/feedback';
+import { migrarParaHttps } from './plataforma';
 import './styles.css';
+
+migrarParaHttps();
 
 // Roda do mouse sobre um campo numérico em foco mudaria o valor sem a pessoa perceber
 document.addEventListener('wheel', () => {
