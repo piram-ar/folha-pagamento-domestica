@@ -5,7 +5,7 @@
 export const MODO_APP = import.meta.env.VITE_MODO_APP === '1';
 
 const SERVIDOR_KEY = 'folha_servidor';
-export const SERVIDOR_PADRAO = 'https://192.168.5.7';
+export const SERVIDOR_PADRAO = 'https://192.168.68.73';
 
 export function getServidor() {
   return localStorage.getItem(SERVIDOR_KEY) || '';
@@ -15,7 +15,7 @@ export function setServidor(url) {
   localStorage.setItem(SERVIDOR_KEY, normalizarServidor(url));
 }
 
-/** "192.168.5.7" -> "https://192.168.5.7" (sem barra no fim) */
+/** "192.168.68.73" -> "https://192.168.68.73" (sem barra no fim) */
 export function normalizarServidor(url) {
   const limpo = url.trim().replace(/\/+$/, '');
   return /^https?:\/\//i.test(limpo) ? limpo : `https://${limpo}`;

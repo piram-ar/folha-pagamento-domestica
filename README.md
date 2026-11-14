@@ -209,7 +209,7 @@ e-mail etc.**), férias e **avisos de pagamento como notificação**. Cadastros 
 navegador.
 
 - **Instalar:** baixe `https://github.com/piram-ar/folha-pagamento-domestica/releases/latest/download/folha-domestica.apk`
-  no celular, abra e permita a instalação. Na primeira abertura, informe o endereço do Pi (ex.: `https://192.168.5.7`).
+  no celular, abra e permita a instalação. Na primeira abertura, informe o endereço do Pi (ex.: `https://192.168.68.73`).
 - **Rede:** o app conversa com o Pi pela rede de casa por HTTPS. Para isso, instale no celular a CA da rede de
   casa (seção "Segurança e HTTPS"). Quem ainda tem `http://` salvo passa para `https://` sozinho quando o Pi
   responde por HTTPS. O backend libera CORS só para a origem do app.

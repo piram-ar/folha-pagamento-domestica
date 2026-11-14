@@ -2,7 +2,7 @@
 # Roda pelo Agendador de Tarefas do Windows (ver README); também pode ser executado à mão.
 # Só copia; nunca apaga nada no Pi nem no OneDrive.
 param(
-    [string]$Pi = "root@192.168.5.7",
+    [string]$Pi = "root@192.168.68.73",
     [string]$Chave = "$env:USERPROFILE\.ssh\folha_pi",
     [string]$Destino = "$env:OneDrive\Backups\folha-domestica"
 )
